@@ -389,3 +389,183 @@ def remove_component(component_id: str, removal_reason: str,
     component.current_location = new_location
     component.installed_position = None
     component.save(db)
+
+
+def create_connection(component_a_id: str, component_b_id: str,
+                     connection_type: Optional[str] = None,
+                     cable_id: Optional[str] = None,
+                     notes: Optional[str] = None,
+                     db: Optional[Database] = None):
+    """
+    Create a connection between two components
+
+    Args:
+        component_a_id: First component (e.g., FEB ID)
+        component_b_id: Second component (e.g., module ID)
+        connection_type: Type of connection (e.g., 'signal', 'power', 'optical')
+        cable_id: ID of cable component used (optional)
+        notes: Additional notes
+        db: Database instance
+
+    Returns:
+        connection_id: ID of created connection
+    """
+    if db is None:
+        db = get_default_db()
+
+    # Verify components exist
+    comp_a = Component.get(component_a_id, db)
+    comp_b = Component.get(component_b_id, db)
+
+    if not comp_a:
+        raise ValueError(f"Component {component_a_id} not found")
+    if not comp_b:
+        raise ValueError(f"Component {component_b_id} not found")
+
+    # If cable specified, verify it exists
+    if cable_id:
+        cable = Component.get(cable_id, db)
+        if not cable:
+            raise ValueError(f"Cable {cable_id} not found")
+
+    with db.get_connection() as conn:
+        cursor = conn.execute("""
+            INSERT INTO connections
+            (component_a_id, component_b_id, connection_type, cable_id,
+             installation_date, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (component_a_id, component_b_id, connection_type, cable_id,
+              datetime.now().isoformat(), notes))
+
+        conn.commit()
+        return cursor.lastrowid
+
+
+def get_connections_for_component(component_id: str,
+                                  db: Optional[Database] = None) -> List[Dict[str, Any]]:
+    """
+    Get all connections for a component
+
+    Returns list of connection records where component appears as either A or B
+    """
+    if db is None:
+        db = get_default_db()
+
+    with db.get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM connections
+            WHERE component_a_id = ? OR component_b_id = ?
+            ORDER BY installation_date DESC
+        """, (component_id, component_id)).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+def get_connected_components(component_id: str,
+                            db: Optional[Database] = None) -> List[Dict[str, Any]]:
+    """
+    Get all components connected to a given component
+
+    Returns:
+        List of dicts with keys: connected_id, connection_type, cable_id
+    """
+    if db is None:
+        db = get_default_db()
+
+    with db.get_connection() as conn:
+        # Get connections where component is A
+        rows_a = conn.execute("""
+            SELECT component_b_id as connected_id, connection_type, cable_id
+            FROM connections
+            WHERE component_a_id = ?
+        """, (component_id,)).fetchall()
+
+        # Get connections where component is B
+        rows_b = conn.execute("""
+            SELECT component_a_id as connected_id, connection_type, cable_id
+            FROM connections
+            WHERE component_b_id = ?
+        """, (component_id,)).fetchall()
+
+        return [dict(row) for row in rows_a] + [dict(row) for row in rows_b]
+
+
+def remove_connection(connection_id: int, db: Optional[Database] = None):
+    """Remove a connection by its ID"""
+    if db is None:
+        db = get_default_db()
+
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM connections WHERE id = ?", (connection_id,))
+        conn.commit()
+
+
+def add_maintenance_log(component_id: str, description: str,
+                       log_type: str = 'note',
+                       severity: str = 'info',
+                       logged_by: Optional[str] = None,
+                       resolution: Optional[str] = None,
+                       db: Optional[Database] = None) -> int:
+    """
+    Add a maintenance log entry for a component
+
+    Args:
+        component_id: ID of component
+        description: Log description/comment
+        log_type: Type of log ('issue', 'repair', 'maintenance', 'note')
+        severity: Severity level ('critical', 'warning', 'info')
+        logged_by: Who created the log entry
+        resolution: Resolution text (optional)
+        db: Database instance
+
+    Returns:
+        log_id: ID of created log entry
+    """
+    if db is None:
+        db = get_default_db()
+
+    # Verify component exists
+    component = Component.get(component_id, db)
+    if not component:
+        raise ValueError(f"Component {component_id} not found")
+
+    # Validate log_type and severity
+    valid_log_types = ['issue', 'repair', 'maintenance', 'note']
+    valid_severities = ['critical', 'warning', 'info']
+
+    if log_type not in valid_log_types:
+        raise ValueError(f"Invalid log_type: {log_type}. Must be one of {valid_log_types}")
+    if severity not in valid_severities:
+        raise ValueError(f"Invalid severity: {severity}. Must be one of {valid_severities}")
+
+    with db.get_connection() as conn:
+        cursor = conn.execute("""
+            INSERT INTO maintenance_log
+            (component_id, log_date, log_type, severity, description,
+             resolution, logged_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (component_id, datetime.now().isoformat(), log_type, severity,
+              description, resolution, logged_by))
+
+        conn.commit()
+        return cursor.lastrowid
+
+
+def get_maintenance_logs(component_id: str,
+                        db: Optional[Database] = None) -> List[Dict[str, Any]]:
+    """
+    Get all maintenance logs for a component
+
+    Returns list of log entries ordered by date (newest first)
+    """
+    if db is None:
+        db = get_default_db()
+
+    with db.get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM maintenance_log
+            WHERE component_id = ?
+            ORDER BY log_date DESC
+        """, (component_id,)).fetchall()
+
+        return [dict(row) for row in rows]
