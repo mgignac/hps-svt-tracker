@@ -52,7 +52,11 @@ class Database:
                     installation_status TEXT NOT NULL,
                     current_location TEXT,
                     installed_position TEXT,
-                    
+
+                    -- Assembly tracking (for modules)
+                    assembled_sensor_id TEXT,
+                    assembled_hybrid_id TEXT,
+
                     -- Type-specific attributes (JSON)
                     attributes_json TEXT,
                     
@@ -61,11 +65,14 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     
-                    CHECK (type IN ('module', 'feb', 'cable', 'optical_board', 
-                                   'mpod_module', 'mpod_crate', 'flange_board', 'other')),
-                    CHECK (installation_status IN ('installed', 'spare', 'incoming', 
-                                                   'testing', 'qualified', 'failed', 
-                                                   'repair', 'degraded', 'retired', 'lost'))
+                    CHECK (type IN ('module', 'hybrid', 'sensor', 'feb', 'cable',
+                                   'optical_board', 'mpod_module', 'mpod_crate',
+                                   'flange_board', 'other')),
+                    CHECK (installation_status IN ('installed', 'spare', 'incoming',
+                                                   'testing', 'qualified', 'failed',
+                                                   'repair', 'degraded', 'retired', 'lost')),
+                    FOREIGN KEY (assembled_sensor_id) REFERENCES components(id),
+                    FOREIGN KEY (assembled_hybrid_id) REFERENCES components(id)
                 )
             """)
             

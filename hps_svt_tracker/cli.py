@@ -10,10 +10,11 @@ from tabulate import tabulate
 from .database import get_default_db, Database
 from .models import (
     Component, TestResult,
-    install_component, remove_component,
+    install_component, remove_component, update_location,
     create_connection, get_connections_for_component,
     get_connected_components, remove_connection,
-    add_maintenance_log, get_maintenance_logs
+    add_maintenance_log, get_maintenance_logs,
+    assemble_module, disassemble_module
 )
 
 
@@ -139,12 +140,42 @@ def show(ctx, component_id):
     click.echo(f"Status:            {component.installation_status}")
     click.echo(f"Current Location:  {component.current_location or 'N/A'}")
     click.echo(f"Installed Position: {component.installed_position or 'N/A'}")
-    
+
+    # Show assembly information for modules
+    if component.type == 'module':
+        if component.assembled_sensor_id or component.assembled_hybrid_id:
+            click.echo(f"\nAssembled Components:")
+            if component.assembled_sensor_id:
+                click.echo(f"  Sensor:  {component.assembled_sensor_id}")
+            if component.assembled_hybrid_id:
+                click.echo(f"  Hybrid:  {component.assembled_hybrid_id}")
+        else:
+            click.echo(f"\nAssembled Components: None")
+
+    # Show if sensor/hybrid is assembled on a module
+    if component.type in ['sensor', 'hybrid']:
+        with db.get_connection() as conn:
+            if component.type == 'sensor':
+                module_row = conn.execute("""
+                    SELECT id FROM components
+                    WHERE assembled_sensor_id = ?
+                """, (component_id,)).fetchone()
+            else:  # hybrid
+                module_row = conn.execute("""
+                    SELECT id FROM components
+                    WHERE assembled_hybrid_id = ?
+                """, (component_id,)).fetchone()
+
+            if module_row:
+                click.echo(f"\nAssembled on Module: {module_row['id']}")
+            else:
+                click.echo(f"\nAssembled on Module: None")
+
     if component.attributes:
         click.echo(f"\nAttributes:")
         for key, value in component.attributes.items():
             click.echo(f"  {key}: {value}")
-    
+
     if component.notes:
         click.echo(f"\nNotes: {component.notes}")
     
@@ -313,9 +344,8 @@ def install(ctx, component_id, position, run_period, installed_by, notes):
 @click.argument('component_id')
 @click.option('--reason', required=True, help='Removal reason')
 @click.option('--removed-by', default=None, help='Who removed it (defaults to current user)')
-@click.option('--location', default='Storage', help='New location')
 @click.pass_context
-def remove(ctx, component_id, reason, removed_by, location):
+def remove(ctx, component_id, reason, removed_by):
     """Remove a component from its installed position"""
     db = ctx.obj['db']
 
@@ -325,9 +355,23 @@ def remove(ctx, component_id, reason, removed_by, location):
 
     try:
         remove_component(component_id, reason,
-                        removed_by=removed_by,
-                        new_location=location, db=db)
-        click.echo(f"Removed {component_id}, now at {location}")
+                        removed_by=removed_by, db=db)
+        click.echo(f"Removed {component_id} from installed position")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@cli.command()
+@click.argument('component_id')
+@click.argument('location')
+@click.pass_context
+def location(ctx, component_id, location):
+    """Update the physical location of a component"""
+    db = ctx.obj['db']
+
+    try:
+        update_location(component_id, location, db=db)
+        click.echo(f"Updated location of {component_id} to: {location}")
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
 
@@ -586,6 +630,71 @@ def comment(ctx, component_id, description, logged_by):
             db=db
         )
         click.echo(f"Comment added (ID: {log_id})")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@cli.command()
+@click.argument('module_id')
+@click.option('--sensor', 'sensor_id', help='Sensor ID to assemble')
+@click.option('--hybrid', 'hybrid_id', help='Hybrid ID to assemble')
+@click.option('--notes', help='Assembly notes/comments')
+@click.option('--assembled-by', default=None, help='Who performed assembly (defaults to current user)')
+@click.pass_context
+def assemble(ctx, module_id, sensor_id, hybrid_id, notes, assembled_by):
+    """Assemble a sensor and/or hybrid onto a module"""
+    db = ctx.obj['db']
+
+    if not sensor_id and not hybrid_id:
+        click.echo("Error: Must specify at least --sensor or --hybrid", err=True)
+        return
+
+    # Use current user if not specified
+    if assembled_by is None:
+        assembled_by = get_current_user()
+
+    try:
+        assemble_module(
+            module_id,
+            sensor_id=sensor_id,
+            hybrid_id=hybrid_id,
+            notes=notes,
+            assembled_by=assembled_by,
+            db=db
+        )
+
+        parts = []
+        if sensor_id:
+            parts.append(f"sensor {sensor_id}")
+        if hybrid_id:
+            parts.append(f"hybrid {hybrid_id}")
+
+        click.echo(f"Assembled {' and '.join(parts)} onto module {module_id}")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@cli.command()
+@click.argument('module_id')
+@click.option('--notes', help='Disassembly notes/comments')
+@click.option('--disassembled-by', default=None, help='Who performed disassembly (defaults to current user)')
+@click.pass_context
+def disassemble(ctx, module_id, notes, disassembled_by):
+    """Disassemble a module (remove sensor and hybrid)"""
+    db = ctx.obj['db']
+
+    # Use current user if not specified
+    if disassembled_by is None:
+        disassembled_by = get_current_user()
+
+    try:
+        disassemble_module(
+            module_id,
+            notes=notes,
+            disassembled_by=disassembled_by,
+            db=db
+        )
+        click.echo(f"Disassembled module {module_id}")
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
 

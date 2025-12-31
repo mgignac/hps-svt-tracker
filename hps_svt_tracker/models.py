@@ -18,8 +18,8 @@ class Component:
     """Represents a component in the SVT system"""
     
     # Valid component types
-    TYPES = ['module', 'feb', 'cable', 'optical_board', 'mpod_module', 
-             'mpod_crate', 'flange_board', 'other']
+    TYPES = ['module', 'hybrid', 'sensor', 'feb', 'cable', 'optical_board',
+             'mpod_module', 'mpod_crate', 'flange_board', 'other']
     
     # Valid installation statuses
     STATUSES = ['installed', 'spare', 'incoming', 'testing', 'qualified', 
@@ -58,6 +58,8 @@ class Component:
         self.asset_tag = kwargs.get('asset_tag')
         self.manufacture_date = kwargs.get('manufacture_date')
         self.notes = kwargs.get('notes')
+        self.assembled_sensor_id = kwargs.get('assembled_sensor_id')
+        self.assembled_hybrid_id = kwargs.get('assembled_hybrid_id')
         self.attributes = attributes or {}
     
     def to_dict(self) -> Dict[str, Any]:
@@ -72,6 +74,8 @@ class Component:
             'installation_status': self.installation_status,
             'current_location': self.current_location,
             'installed_position': self.installed_position,
+            'assembled_sensor_id': self.assembled_sensor_id,
+            'assembled_hybrid_id': self.assembled_hybrid_id,
             'attributes_json': json.dumps(self.attributes) if self.attributes else None,
             'notes': self.notes,
         }
@@ -90,6 +94,8 @@ class Component:
             installation_status=row['installation_status'],
             current_location=row['current_location'],
             installed_position=row['installed_position'],
+            assembled_sensor_id=row.get('assembled_sensor_id'),
+            assembled_hybrid_id=row.get('assembled_hybrid_id'),
             attributes=attributes,
             notes=row['notes']
         )
@@ -159,8 +165,8 @@ class Component:
         if status:
             query += " AND installation_status = ?"
             params.append(status)
-        
-        query += " ORDER BY type, id"
+
+        query += " ORDER BY created_at DESC"
         
         with db.get_connection() as conn:
             rows = conn.execute(query, params).fetchall()
@@ -347,7 +353,6 @@ def install_component(component_id: str, position: str, run_period: str,
     
     # Update component
     component.installation_status = 'installed'
-    component.current_location = 'JLab'
     component.installed_position = position
     component.save(db)
     
@@ -364,17 +369,16 @@ def install_component(component_id: str, position: str, run_period: str,
 
 def remove_component(component_id: str, removal_reason: str,
                     removed_by: Optional[str] = None,
-                    new_location: str = 'Storage',
                     db: Optional[Database] = None):
     """Remove a component from its installed position"""
     if db is None:
         db = get_default_db()
-    
+
     # Get component
     component = Component.get(component_id, db)
     if not component:
         raise ValueError(f"Component {component_id} not found")
-    
+
     # Update installation history
     with db.get_connection() as conn:
         conn.execute("""
@@ -383,11 +387,33 @@ def remove_component(component_id: str, removal_reason: str,
             WHERE component_id = ? AND removal_date IS NULL
         """, (datetime.now().isoformat(), removed_by, removal_reason, component_id))
         conn.commit()
-    
-    # Update component
+
+    # Update component (location remains unchanged)
     component.installation_status = 'spare'
-    component.current_location = new_location
     component.installed_position = None
+    component.save(db)
+
+
+def update_location(component_id: str, new_location: str,
+                   db: Optional[Database] = None):
+    """
+    Update the physical location of a component
+
+    Args:
+        component_id: ID of component to update
+        new_location: New physical location
+        db: Database instance
+    """
+    if db is None:
+        db = get_default_db()
+
+    # Get component
+    component = Component.get(component_id, db)
+    if not component:
+        raise ValueError(f"Component {component_id} not found")
+
+    # Update location
+    component.current_location = new_location
     component.save(db)
 
 
@@ -569,3 +595,153 @@ def get_maintenance_logs(component_id: str,
         """, (component_id,)).fetchall()
 
         return [dict(row) for row in rows]
+
+
+def assemble_module(module_id: str,
+                   sensor_id: Optional[str] = None,
+                   hybrid_id: Optional[str] = None,
+                   notes: Optional[str] = None,
+                   assembled_by: Optional[str] = None,
+                   db: Optional[Database] = None):
+    """
+    Assemble a sensor and/or hybrid onto a module
+
+    Args:
+        module_id: ID of the module component
+        sensor_id: ID of sensor to assemble (optional)
+        hybrid_id: ID of hybrid to assemble (optional)
+        notes: Assembly notes/comments
+        assembled_by: Who performed the assembly
+        db: Database instance
+
+    Raises:
+        ValueError: If module doesn't exist, is not a module type, or components already assembled
+    """
+    if db is None:
+        db = get_default_db()
+
+    # Get module
+    module = Component.get(module_id, db)
+    if not module:
+        raise ValueError(f"Module {module_id} not found")
+    if module.type != 'module':
+        raise ValueError(f"Component {module_id} is not a module (type: {module.type})")
+
+    # Verify sensor if provided
+    if sensor_id:
+        sensor = Component.get(sensor_id, db)
+        if not sensor:
+            raise ValueError(f"Sensor {sensor_id} not found")
+        if sensor.type != 'sensor':
+            raise ValueError(f"Component {sensor_id} is not a sensor (type: {sensor.type})")
+
+        # Check if sensor is already assembled on another module
+        with db.get_connection() as conn:
+            existing = conn.execute("""
+                SELECT id FROM components
+                WHERE assembled_sensor_id = ? AND id != ?
+            """, (sensor_id, module_id)).fetchone()
+            if existing:
+                raise ValueError(f"Sensor {sensor_id} is already assembled on module {existing['id']}")
+
+        # Update module with sensor
+        module.assembled_sensor_id = sensor_id
+
+    # Verify hybrid if provided
+    if hybrid_id:
+        hybrid = Component.get(hybrid_id, db)
+        if not hybrid:
+            raise ValueError(f"Hybrid {hybrid_id} not found")
+        if hybrid.type != 'hybrid':
+            raise ValueError(f"Component {hybrid_id} is not a hybrid (type: {hybrid.type})")
+
+        # Check if hybrid is already assembled on another module
+        with db.get_connection() as conn:
+            existing = conn.execute("""
+                SELECT id FROM components
+                WHERE assembled_hybrid_id = ? AND id != ?
+            """, (hybrid_id, module_id)).fetchone()
+            if existing:
+                raise ValueError(f"Hybrid {hybrid_id} is already assembled on module {existing['id']}")
+
+        # Update module with hybrid
+        module.assembled_hybrid_id = hybrid_id
+
+    # Save module
+    module.save(db)
+
+    # Add maintenance log if notes provided
+    if notes:
+        log_description = f"Assembly: "
+        parts = []
+        if sensor_id:
+            parts.append(f"sensor {sensor_id}")
+        if hybrid_id:
+            parts.append(f"hybrid {hybrid_id}")
+        log_description += " and ".join(parts) + f" - {notes}"
+
+        add_maintenance_log(
+            module_id,
+            log_description,
+            log_type='maintenance',
+            severity='info',
+            logged_by=assembled_by,
+            db=db
+        )
+
+
+def disassemble_module(module_id: str,
+                      notes: Optional[str] = None,
+                      disassembled_by: Optional[str] = None,
+                      db: Optional[Database] = None):
+    """
+    Disassemble a module (remove sensor and hybrid)
+
+    Args:
+        module_id: ID of the module component
+        notes: Disassembly notes/comments
+        disassembled_by: Who performed the disassembly
+        db: Database instance
+
+    Raises:
+        ValueError: If module doesn't exist or is not a module type
+    """
+    if db is None:
+        db = get_default_db()
+
+    # Get module
+    module = Component.get(module_id, db)
+    if not module:
+        raise ValueError(f"Module {module_id} not found")
+    if module.type != 'module':
+        raise ValueError(f"Component {module_id} is not a module (type: {module.type})")
+
+    # Check if anything is assembled
+    if not module.assembled_sensor_id and not module.assembled_hybrid_id:
+        raise ValueError(f"Module {module_id} has nothing assembled")
+
+    # Record what was disassembled
+    disassembled_parts = []
+    if module.assembled_sensor_id:
+        disassembled_parts.append(f"sensor {module.assembled_sensor_id}")
+    if module.assembled_hybrid_id:
+        disassembled_parts.append(f"hybrid {module.assembled_hybrid_id}")
+
+    # Clear assembly
+    module.assembled_sensor_id = None
+    module.assembled_hybrid_id = None
+    module.save(db)
+
+    # Add maintenance log
+    log_description = f"Disassembly: removed " + " and ".join(disassembled_parts)
+    if notes:
+        log_description += f" - {notes}"
+
+    add_maintenance_log(
+        module_id,
+        log_description,
+        log_type='maintenance',
+        severity='info',
+        logged_by=disassembled_by,
+        db=db
+    )

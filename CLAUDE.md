@@ -45,14 +45,38 @@ svt test HPK-SN123 --type iv_curve --pass --voltage 60 --current 2.3e-6
 
 # Install/remove components
 svt install HPK-SN123 Layer1_top_axial --run-period "2025_spring_run"
-svt remove HPK-SN123 --reason "end_of_run" --location "Clean Room"
+svt install FLANGE-001 Flange_slot0 --run-period "2025_spring_run"
+svt remove HPK-SN123 --reason "end_of_run"
+
+# Update component location (separate from installation)
+svt location HPK-SN123 "Clean Room"
+svt location FLANGE-001 "JLab"
 
 # Add maintenance log or comment
 svt log HPK-SN123 "Component shows degradation" --type issue --severity warning
 svt comment HPK-SN123 "Component working well"
 
+# Assemble/disassemble modules from sensors and hybrids
+svt add --id MODULE-001 --type module --status incoming
+svt add --id SENSOR-001 --type sensor --status incoming
+svt add --id HYBRID-001 --type hybrid --status incoming
+svt assemble MODULE-001 --sensor SENSOR-001 --hybrid HYBRID-001 --notes "Assembled in clean room"
+svt disassemble MODULE-001 --notes "Maintenance required"
+
 ### Automatic User Tracking
-All commands that track "who" performed an action (`--tested-by`, `--installed-by`, `--removed-by`, `--logged-by`) automatically use the current system username if not specified. You can still override by providing the option explicitly.
+All commands that track "who" performed an action (`--tested-by`, `--installed-by`, `--removed-by`, `--logged-by`, `--assembled-by`, `--disassembled-by`) automatically use the current system username if not specified. You can still override by providing the option explicitly.
+
+### Location Tracking
+Component location is tracked independently from installation status. Installing a component does NOT change its location - you must use the `location` command explicitly to update where a component is physically located. Similarly, removing a component from its installed position does NOT change its location.
+
+### Module Assembly
+Modules are assembled from sensors and hybrids:
+- Create separate components for the module, sensor, and hybrid
+- Use `svt assemble` to attach sensor and/or hybrid to a module
+- Sensors and hybrids remain independently trackable even when assembled
+- A sensor/hybrid can only be assembled on one module at a time
+- Use `svt disassemble` to remove sensor and hybrid from a module
+- Assembly/disassembly events are logged in maintenance history
 ```
 
 ## Architecture
@@ -69,6 +93,8 @@ All commands that track "who" performed an action (`--tested-by`, `--installed-b
 - `Component` - Represents detector components with CRUD operations
 - `TestResult` - Test results with automatic file organization
 - `install_component()` / `remove_component()` - Manage installation lifecycle
+- `update_location()` - Update physical location (separate from installation)
+- `assemble_module()` / `disassemble_module()` - Manage module assembly from sensors and hybrids
 - Components have JSON attributes field for type-specific metadata
 - Test files are automatically organized: `test_data/YYYY/component_id/timestamp_testtype_N.ext`
 
@@ -82,6 +108,7 @@ All commands that track "who" performed an action (`--tested-by`, `--installed-b
 **components** - Main component registry
 - Primary key: `id` (typically manufacturer serial number)
 - Tracks current state: `installation_status`, `current_location`, `installed_position`
+- Assembly tracking: `assembled_sensor_id`, `assembled_hybrid_id` (for modules)
 - JSON field `attributes_json` for type-specific data
 - Enforces valid types/statuses via CHECK constraints
 
@@ -101,9 +128,11 @@ All commands that track "who" performed an action (`--tested-by`, `--installed-b
 
 ### Component Types and Statuses
 
-**Valid Types:** module, feb, cable, optical_board, mpod_module, mpod_crate, flange_board, other
+**Valid Types:** module, hybrid, sensor, feb, cable, optical_board, mpod_module, mpod_crate, flange_board, other
 
 **Valid Statuses:** installed, spare, incoming, testing, qualified, failed, repair, degraded, retired, lost
+
+**Module Assembly:** Modules are assembled from sensors and hybrids. The assembly relationship is tracked in the components table via foreign keys.
 
 ### Position Notation
 
@@ -114,6 +143,10 @@ Example: `Layer1_top_axial`, `Layer2_bottom_stereo`
 Example: `Layer5_top_axial_slot`, `Layer6_bottom_stereo_hole`
 
 **FEB Positions:** `FEBN` (e.g., `FEB1`, `FEB2`)
+
+**Flange Board Positions:** `Flange_slotN` (slots 0-3)
+Example: `Flange_slot0`, `Flange_slot1`, `Flange_slot2`, `Flange_slot3`
+Note: Flange boards are installed in the vacuum flange, which bridges connections from inside vacuum to outside. There is only one flange with 4 slots numbered 0-3.
 
 ## Key Design Patterns
 

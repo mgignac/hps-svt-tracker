@@ -96,6 +96,137 @@ svt remove HPK-SN123456 \
     --location "Clean Room Storage"
 ```
 
+## Module Assembly Workflow
+
+Modules are assembled from separate sensor and hybrid components. This section demonstrates the complete workflow from component creation through assembly, testing, installation, and eventual disassembly.
+
+### Step 1: Create Individual Components
+
+First, create the module shell and its constituent parts:
+
+```bash
+# Create the module component (empty shell)
+svt add --id MODULE-L1-001 --type module --manufacturer HPK \
+        --status incoming --location "Clean Room"
+
+# Create the sensor
+svt add --id SENSOR-S12345 --type sensor --manufacturer HPK \
+        --status incoming --location "Clean Room"
+
+# Create the hybrid
+svt add --id HYBRID-H67890 --type hybrid --manufacturer SLAC \
+        --status incoming --location "Clean Room"
+```
+
+### Step 2: Assemble the Module
+
+Attach the sensor and hybrid to the module:
+
+```bash
+# Assemble sensor and hybrid onto module
+svt assemble MODULE-L1-001 \
+    --sensor SENSOR-S12345 \
+    --hybrid HYBRID-H67890 \
+    --assembled-by "Jane Doe" \
+    --notes "Assembled in clean room, epoxy cure time 24hrs"
+```
+
+You can also assemble components separately:
+
+```bash
+# Attach only sensor first
+svt assemble MODULE-L1-001 --sensor SENSOR-S12345
+
+# Attach hybrid later
+svt assemble MODULE-L1-001 --hybrid HYBRID-H67890
+```
+
+### Step 3: Test the Assembled Module
+
+Record test results for the assembled module:
+
+```bash
+# IV curve test
+svt test MODULE-L1-001 --type iv_curve \
+     --pass \
+     --voltage 60 \
+     --current 2.3e-6 \
+     --temp -9.0 \
+     --images /path/to/iv_curve.png \
+     --notes "All channels functional"
+
+# Noise test
+svt test MODULE-L1-001 --type noise_test \
+     --pass \
+     --noise 1580 \
+     --images /path/to/noise_scan.png
+
+# Update status after qualification
+svt add --id MODULE-L1-001 --status qualified
+```
+
+### Step 4: Install in Detector
+
+Once qualified, install the module:
+
+```bash
+svt install MODULE-L1-001 Layer1_top_axial \
+    --run-period "2025_spring_run" \
+    --installed-by "John Doe"
+```
+
+### Step 5: Track During Operations
+
+Add maintenance logs and comments during the run:
+
+```bash
+# Log observations
+svt log MODULE-L1-001 "Monitoring noise levels" --type observation
+
+# Add comment
+svt comment MODULE-L1-001 "Performance stable after 2 weeks"
+```
+
+### Step 6: Remove from Detector
+
+At end of run period or for maintenance:
+
+```bash
+svt remove MODULE-L1-001 \
+    --reason "end_of_run" \
+    --removed-by "Jane Doe" \
+    --location "Clean Room"
+```
+
+### Step 7: Disassemble if Needed
+
+Disassemble the module for repair, component reuse, or retirement:
+
+```bash
+svt disassemble MODULE-L1-001 \
+    --disassembled-by "Jane Doe" \
+    --notes "Sensor reuse for new module, hybrid shows degradation"
+```
+
+After disassembly:
+- The sensor and hybrid are detached but remain in the database
+- Both can be reassembled onto different modules or retired
+- Assembly/disassembly history is preserved in maintenance logs
+
+### View Complete Module History
+
+Check the full lifecycle of the module:
+
+```bash
+svt show MODULE-L1-001
+```
+
+This displays:
+- Current assembly state (which sensor/hybrid attached)
+- All test results
+- Installation history
+- Maintenance logs including assembly/disassembly events
+
 ### View Summary Statistics
 
 ```bash
@@ -105,7 +236,9 @@ svt summary
 ## Component Types
 
 Supported component types:
-- `module` - Silicon detector modules (hybrid + sensor)
+- `module` - Silicon detector modules (assembled from sensor + hybrid)
+- `sensor` - Silicon sensors (can be assembled onto modules)
+- `hybrid` - Readout hybrids (can be assembled onto modules)
 - `feb` - Front End Boards
 - `cable` - Signal/power cables
 - `optical_board` - Optical transmission boards
