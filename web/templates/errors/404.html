@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}404 Not Found - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 text-center py-5">
+        <i class="bi bi-exclamation-triangle text-warning" style="font-size: 5rem;"></i>
+        <h1 class="display-4 mt-4">404 - Not Found</h1>
+        <p class="lead text-muted">The page or resource you're looking for could not be found.</p>
+        {% if error.description %}
+        <p class="text-muted">{{ error.description }}</p>
+        {% endif %}
+        <div class="mt-4">
+            <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                <i class="bi bi-house"></i> Go to Dashboard
+            </a>
+            <a href="{{ url_for('components.list_components') }}" class="btn btn-outline-primary">
+                <i class="bi bi-cpu"></i> View Components
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

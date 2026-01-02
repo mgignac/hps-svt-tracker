@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1>
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </h1>
+        <p class="lead">Component tracking and test management for the HPS Silicon Vertex Tracker</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase mb-0">Total Components</h6>
+                        <h2 class="display-4 mb-0">{{ stats.total_components }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="bi bi-cpu"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase mb-0">Installed</h6>
+                        <h2 class="display-4 mb-0">{{ stats.installed }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase mb-0">Spare</h6>
+                        <h2 class="display-4 mb-0">{{ stats.spare }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="bi bi-box"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase mb-0">Tests (30d)</h6>
+                        <h2 class="display-4 mb-0">{{ stats.recent_tests }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity & Component Summary -->
+<div class="row">
+    <!-- Recent Tests -->
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Tests</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_tests %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Component</th>
+                                <th>Test Type</th>
+                                <th>Date</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for test in recent_tests %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('components.component_detail', component_id=test.component_id) }}">
+                                        {{ test.component_id }}
+                                    </a>
+                                </td>
+                                <td>{{ test.test_type }}</td>
+                                <td>{{ test.test_date[:10] }}</td>
+                                <td>
+                                    {% if test.pass_fail %}
+                                        <span class="badge bg-success">PASS</span>
+                                    {% elif test.pass_fail == False %}
+                                        <span class="badge bg-danger">FAIL</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">N/A</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted p-3 mb-0">No recent test data</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Component Summary -->
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Components by Type</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if component_counts %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Type</th>
+                                <th class="text-end">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in component_counts %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('components.list_components', type=row.type) }}">
+                                        {{ row.type }}
+                                    </a>
+                                </td>
+                                <td class="text-end">
+                                    <span class="badge bg-primary">{{ row.count }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted p-3 mb-0">No component data</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

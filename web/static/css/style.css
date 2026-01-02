@@ -1,0 +1,160 @@
+/*
+ * Custom CSS for HPS SVT Tracker Web Interface
+ */
+
+/* Theme colors */
+:root {
+    --hps-primary: #003366;
+    --hps-secondary: #00509e;
+    --hps-success: #28a745;
+    --hps-danger: #dc3545;
+    --hps-warning: #ffc107;
+    --hps-info: #17a2b8;
+}
+
+/* Navigation bar */
+.bg-hps-primary {
+    background-color: var(--hps-primary) !important;
+}
+
+.navbar-dark .navbar-brand {
+    font-weight: bold;
+    font-size: 1.3rem;
+}
+
+/* Status badges */
+.status-installed {
+    background-color: var(--hps-success);
+    color: white;
+}
+
+.status-spare {
+    background-color: var(--hps-info);
+    color: white;
+}
+
+.status-incoming {
+    background-color: #6c757d;
+    color: white;
+}
+
+.status-testing {
+    background-color: var(--hps-warning);
+    color: #000;
+}
+
+.status-qualified {
+    background-color: #20c997;
+    color: white;
+}
+
+.status-failed {
+    background-color: var(--hps-danger);
+    color: white;
+}
+
+.status-repair {
+    background-color: #fd7e14;
+    color: white;
+}
+
+.status-degraded {
+    background-color: #e83e8c;
+    color: white;
+}
+
+.status-retired {
+    background-color: #6c757d;
+    color: white;
+}
+
+.status-lost {
+    background-color: #343a40;
+    color: white;
+}
+
+/* Test result indicators */
+.test-pass {
+    color: var(--hps-success);
+    font-weight: bold;
+}
+
+.test-fail {
+    color: var(--hps-danger);
+    font-weight: bold;
+}
+
+/* Table enhancements */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Card enhancements */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: none;
+}
+
+.card-header {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+}
+
+/* Dashboard stat cards */
+.bg-primary, .bg-success, .bg-info, .bg-warning, .bg-danger {
+    border: none;
+}
+
+/* Responsive images in test details */
+.card img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Link styling in tables */
+table a {
+    text-decoration: none;
+    color: var(--hps-primary);
+    font-weight: 500;
+}
+
+table a:hover {
+    text-decoration: underline;
+    color: var(--hps-secondary);
+}
+
+/* Breadcrumb styling */
+.breadcrumb {
+    background-color: #f8f9fa;
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+}
+
+/* Definition list styling */
+dt {
+    font-weight: 600;
+    color: #495057;
+}
+
+dd {
+    margin-bottom: 0.5rem;
+}
+
+/* Badge sizing for counts */
+.badge {
+    font-weight: 500;
+}

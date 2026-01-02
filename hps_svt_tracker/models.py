@@ -305,15 +305,31 @@ class TestResult:
             self.stored_data_path = os.path.relpath(dest_path, db.data_dir)
     
     @classmethod
+    def get_by_id(cls, test_id: int, db: Optional[Database] = None) -> Optional[Dict[str, Any]]:
+        """Get a test result by its ID"""
+        if db is None:
+            db = get_default_db()
+
+        with db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM test_results WHERE id = ?",
+                (test_id,)
+            ).fetchone()
+
+            if row:
+                return dict(row)
+            return None
+
+    @classmethod
     def get_for_component(cls, component_id: str, db: Optional[Database] = None) -> List[Dict[str, Any]]:
         """Get all test results for a component"""
         if db is None:
             db = get_default_db()
-        
+
         with db.get_connection() as conn:
             rows = conn.execute(
-                """SELECT * FROM test_results 
-                   WHERE component_id = ? 
+                """SELECT * FROM test_results
+                   WHERE component_id = ?
                    ORDER BY test_date DESC""",
                 (component_id,)
             ).fetchall()

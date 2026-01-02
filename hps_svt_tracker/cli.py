@@ -3,6 +3,7 @@ Command-line interface for HPS SVT Component Tracker
 """
 import click
 import json
+import os
 import getpass
 from datetime import datetime
 from tabulate import tabulate
@@ -189,13 +190,14 @@ def show(ctx, component_id):
         table_data = []
         for test in test_results:
             table_data.append([
+                test['id'],
                 test['test_date'][:19],  # Trim microseconds
                 test['test_type'],
                 'PASS' if test['pass_fail'] else 'FAIL' if test['pass_fail'] is not None else 'N/A',
                 test['tested_by'] or ''
             ])
-        
-        headers = ['Date', 'Test Type', 'Result', 'Tested By']
+
+        headers = ['ID', 'Date', 'Test Type', 'Result', 'Tested By']
         click.echo(tabulate(table_data, headers=headers, tablefmt='simple'))
     else:
         click.echo(f"\nNo test history")
@@ -247,6 +249,115 @@ def show(ctx, component_id):
 
         headers = ['Date', 'Type', 'Severity', 'Description', 'Logged By']
         click.echo(tabulate(table_data, headers=headers, tablefmt='simple'))
+
+
+@cli.command()
+@click.argument('test_id', type=int)
+@click.pass_context
+def show_test(ctx, test_id):
+    """Show detailed information about a test result"""
+    db = ctx.obj['db']
+
+    test = TestResult.get_by_id(test_id, db)
+    if not test:
+        click.echo(f"Test {test_id} not found", err=True)
+        return
+
+    # Test header
+    click.echo(f"\n{'='*60}")
+    click.echo(f"Test Result ID: {test['id']}")
+    click.echo(f"{'='*60}")
+    click.echo(f"Component:     {test['component_id']}")
+    click.echo(f"Test Type:     {test['test_type']}")
+    click.echo(f"Test Date:     {test['test_date'][:19]}")
+
+    # Pass/Fail
+    if test['pass_fail'] is not None:
+        result = 'PASS' if test['pass_fail'] else 'FAIL'
+        click.echo(f"Result:        {result}")
+    else:
+        click.echo(f"Result:        N/A")
+
+    # Tested by
+    if test['tested_by']:
+        click.echo(f"Tested By:     {test['tested_by']}")
+
+    # Simple measurements
+    click.echo(f"\n{'='*60}")
+    click.echo(f"Measurements")
+    click.echo(f"{'='*60}")
+
+    has_measurements = False
+    if test['voltage_measured'] is not None:
+        click.echo(f"Voltage:       {test['voltage_measured']} V")
+        has_measurements = True
+    if test['current_measured'] is not None:
+        click.echo(f"Current:       {test['current_measured']} A")
+        has_measurements = True
+    if test['noise_level'] is not None:
+        click.echo(f"Noise Level:   {test['noise_level']}")
+        has_measurements = True
+    if test['temperature'] is not None:
+        click.echo(f"Temperature:   {test['temperature']} °C")
+        has_measurements = True
+
+    # Additional measurements from JSON
+    if test['measurements_json']:
+        measurements = json.loads(test['measurements_json'])
+        if measurements:
+            has_measurements = True
+            click.echo(f"\nAdditional Measurements:")
+            for key, value in measurements.items():
+                # Skip if already shown above
+                if key not in ['voltage_measured', 'current_measured', 'noise_level', 'temperature']:
+                    click.echo(f"  {key}: {value}")
+
+    if not has_measurements:
+        click.echo("No measurements recorded")
+
+    # Test setup and conditions
+    if test['test_setup']:
+        click.echo(f"\n{'='*60}")
+        click.echo(f"Test Setup")
+        click.echo(f"{'='*60}")
+        click.echo(test['test_setup'])
+
+    if test['test_conditions']:
+        click.echo(f"\n{'='*60}")
+        click.echo(f"Test Conditions")
+        click.echo(f"{'='*60}")
+        click.echo(test['test_conditions'])
+
+    # Files
+    image_paths = json.loads(test['image_paths']) if test['image_paths'] else []
+    data_file_path = test['data_file_path']
+
+    if image_paths or data_file_path:
+        click.echo(f"\n{'='*60}")
+        click.echo(f"Associated Files")
+        click.echo(f"{'='*60}")
+
+        if image_paths:
+            click.echo(f"\nImages ({len(image_paths)}):")
+            for img_path in image_paths:
+                full_path = os.path.join(db.data_dir, img_path)
+                exists = "✓" if os.path.exists(full_path) else "✗"
+                click.echo(f"  {exists} {full_path}")
+
+        if data_file_path:
+            full_path = os.path.join(db.data_dir, data_file_path)
+            exists = "✓" if os.path.exists(full_path) else "✗"
+            click.echo(f"\nData file:")
+            click.echo(f"  {exists} {full_path}")
+
+    # Notes
+    if test['notes']:
+        click.echo(f"\n{'='*60}")
+        click.echo(f"Notes")
+        click.echo(f"{'='*60}")
+        click.echo(test['notes'])
+
+    click.echo()
 
 
 @cli.command()

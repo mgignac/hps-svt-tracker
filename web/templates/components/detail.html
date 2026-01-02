@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}{{ component.id }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('components.list_components') }}">Components</a></li>
+                <li class="breadcrumb-item active">{{ component.id }}</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-cpu"></i> {{ component.id }}</h1>
+    </div>
+</div>
+
+<!-- Component Information Card -->
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Component Information</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row">
+                    <dt class="col-sm-4">Type:</dt>
+                    <dd class="col-sm-8">{{ component.type }}</dd>
+
+                    <dt class="col-sm-4">Serial Number:</dt>
+                    <dd class="col-sm-8">{{ component.serial_number or 'N/A' }}</dd>
+
+                    <dt class="col-sm-4">Manufacturer:</dt>
+                    <dd class="col-sm-8">{{ component.manufacturer or 'N/A' }}</dd>
+
+                    <dt class="col-sm-4">Asset Tag:</dt>
+                    <dd class="col-sm-8">{{ component.asset_tag or 'N/A' }}</dd>
+
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge status-{{ component.installation_status }}">
+                            {{ component.installation_status }}
+                        </span>
+                    </dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="row">
+                    <dt class="col-sm-5">Current Location:</dt>
+                    <dd class="col-sm-7">{{ component.current_location or 'N/A' }}</dd>
+
+                    <dt class="col-sm-5">Installed Position:</dt>
+                    <dd class="col-sm-7">{{ component.installed_position or 'N/A' }}</dd>
+
+                    {% if component.type == 'module' %}
+                        <dt class="col-sm-5">Assembled Sensor:</dt>
+                        <dd class="col-sm-7">
+                            {% if component.assembled_sensor_id %}
+                                <a href="{{ url_for('components.component_detail', component_id=component.assembled_sensor_id) }}">
+                                    {{ component.assembled_sensor_id }}
+                                </a>
+                            {% else %}
+                                None
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-5">Assembled Hybrid:</dt>
+                        <dd class="col-sm-7">
+                            {% if component.assembled_hybrid_id %}
+                                <a href="{{ url_for('components.component_detail', component_id=component.assembled_hybrid_id) }}">
+                                    {{ component.assembled_hybrid_id }}
+                                </a>
+                            {% else %}
+                                None
+                            {% endif %}
+                        </dd>
+                    {% endif %}
+
+                    {% if component.type in ['sensor', 'hybrid'] and assembly_info %}
+                        <dt class="col-sm-5">Assembled On:</dt>
+                        <dd class="col-sm-7">
+                            <a href="{{ url_for('components.component_detail', component_id=assembly_info.id) }}">
+                                {{ assembly_info.id }} ({{ assembly_info.type }})
+                            </a>
+                        </dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        {% if component.notes %}
+        <hr>
+        <div>
+            <strong>Notes:</strong>
+            <p class="mb-0">{{ component.notes }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Test History -->
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="bi bi-graph-up"></i> Test History
+            <span class="badge bg-secondary">{{ tests|length }}</span>
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if tests %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Test Type</th>
+                        <th>Result</th>
+                        <th>Tested By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for test in tests %}
+                    <tr>
+                        <td>{{ test.test_date[:19] }}</td>
+                        <td>{{ test.test_type }}</td>
+                        <td>
+                            {% if test.pass_fail %}
+                                <span class="test-pass"><i class="bi bi-check-circle"></i> PASS</span>
+                            {% elif test.pass_fail == False %}
+                                <span class="test-fail"><i class="bi bi-x-circle"></i> FAIL</span>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>{{ test.tested_by or '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('tests.test_detail', test_id=test.id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No test history</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Installation History -->
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="bi bi-calendar-check"></i> Installation History
+            <span class="badge bg-secondary">{{ installations|length }}</span>
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if installations %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Position</th>
+                        <th>Installed</th>
+                        <th>Removed</th>
+                        <th>Run Period</th>
+                        <th>Installed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inst in installations %}
+                    <tr>
+                        <td>{{ inst.position }}</td>
+                        <td>{{ inst.installation_date[:19] }}</td>
+                        <td>
+                            {% if inst.removal_date %}
+                                {{ inst.removal_date[:19] }}
+                            {% else %}
+                                <span class="badge bg-success">Current</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ inst.run_period or '-' }}</td>
+                        <td>{{ inst.installed_by or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No installation history</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Maintenance Log -->
+{% if logs %}
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="bi bi-tools"></i> Maintenance Log
+            <span class="badge bg-secondary">{{ logs|length }}</span>
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>Description</th>
+                        <th>Logged By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.log_date[:19] }}</td>
+                        <td><span class="badge bg-secondary">{{ log.log_type }}</span></td>
+                        <td>
+                            {% if log.severity == 'critical' %}
+                                <span class="badge bg-danger">{{ log.severity }}</span>
+                            {% elif log.severity == 'warning' %}
+                                <span class="badge bg-warning text-dark">{{ log.severity }}</span>
+                            {% else %}
+                                <span class="badge bg-info">{{ log.severity }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.description }}</td>
+                        <td>{{ log.logged_by or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Connections -->
+{% if connections %}
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="bi bi-bezier2"></i> Connections
+            <span class="badge bg-secondary">{{ connections|length }}</span>
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Connected To</th>
+                        <th>Connection Type</th>
+                        <th>Cable ID</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in connections %}
+                    <tr>
+                        <td>
+                            {% if conn.component_a_id == component.id %}
+                                <a href="{{ url_for('components.component_detail', component_id=conn.component_b_id) }}">
+                                    {{ conn.component_b_id }}
+                                </a>
+                            {% else %}
+                                <a href="{{ url_for('components.component_detail', component_id=conn.component_a_id) }}">
+                                    {{ conn.component_a_id }}
+                                </a>
+                            {% endif %}
+                        </td>
+                        <td>{{ conn.connection_type or '-' }}</td>
+                        <td>
+                            {% if conn.cable_id %}
+                                <a href="{{ url_for('components.component_detail', component_id=conn.cable_id) }}">
+                                    {{ conn.cable_id }}
+                                </a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ conn.installation_date[:10] if conn.installation_date else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
