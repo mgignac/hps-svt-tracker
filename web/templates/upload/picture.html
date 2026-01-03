@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Picture - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Picture</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-images"></i> Upload Component Pictures</h1>
+        <p class="text-muted">Upload one or more images for a component</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Image Upload</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    <!-- Component ID -->
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Component ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a component ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Start typing to see matching component IDs</div>
+                    </div>
+
+                    <!-- Image Files -->
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Image Files <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="image" name="image"
+                               accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif" required multiple>
+                        <div class="form-text">Allowed formats: PNG, JPG, JPEG, GIF, BMP, TIFF. You can select multiple files.</div>
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div class="mb-3" id="preview-container" style="display: none;">
+                        <label class="form-label">Preview <span id="file-count" class="badge bg-secondary"></span></label>
+                        <div class="border rounded p-2 bg-light">
+                            <div id="image-previews" class="d-flex flex-wrap gap-2 justify-content-center"></div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Optional description (e.g., 'Front view of module', 'Damage on connector')"></textarea>
+                        <div class="form-text">This description will be applied to all uploaded images.</div>
+                    </div>
+
+                    <!-- Uploaded By -->
+                    <div class="mb-3">
+                        <label for="uploaded_by" class="form-label">Uploaded By</label>
+                        <input type="text" class="form-control" id="uploaded_by" name="uploaded_by"
+                               placeholder="Leave blank to use current system user">
+                        <div class="form-text">Optional - defaults to your system username</div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload Images
+                        </button>
+                        <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Tips</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li class="mb-2">Images are stored with the component and can be viewed on the component detail page.</li>
+                    <li class="mb-2">Use descriptive names or descriptions to help identify what the image shows.</li>
+                    <li class="mb-2">For test-related images, consider using the test recording feature instead.</li>
+                    <li class="mb-2">Maximum recommended image size: 10MB.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Multi-image preview functionality
+document.getElementById('image').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const previewContainer = document.getElementById('preview-container');
+    const previewsDiv = document.getElementById('image-previews');
+    const fileCount = document.getElementById('file-count');
+
+    previewsDiv.innerHTML = '';
+
+    if (files.length > 0) {
+        fileCount.textContent = files.length + ' file' + (files.length > 1 ? 's' : '');
+        previewContainer.style.display = 'block';
+
+        Array.from(files).forEach(function(file, index) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = 'Preview ' + (index + 1);
+                img.className = 'img-thumbnail';
+                img.style.maxHeight = '150px';
+                img.style.maxWidth = '200px';
+                previewsDiv.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+    } else {
+        previewContainer.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

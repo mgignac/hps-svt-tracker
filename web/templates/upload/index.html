@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Upload - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-cloud-upload"></i> Upload</h1>
+        <p class="text-muted">Upload files and data to the component tracker</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Picture Upload Card -->
+    <div class="col-md-4 mb-4">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-image text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Component Picture</h5>
+                <p class="card-text text-muted">
+                    Upload an image for a component. Useful for documenting visual inspections,
+                    damage, labels, or any other visual information.
+                </p>
+                <a href="{{ url_for('upload.picture') }}" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Upload Picture
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Component Picture</h5>
+                <p class="card-text text-muted">
+                    Upload an image for a component. Useful for documenting visual inspections,
+                    damage, labels, or any other visual information.
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-upload"></i> Upload Picture
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Placeholder for future upload types -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 bg-light">
+            <div class="card-body text-center">
+                <i class="bi bi-file-earmark-text text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Test Data</h5>
+                <p class="card-text text-muted">
+                    Upload test data files (CSV, HDF5, etc.) for components.
+                    <br><em>Coming soon...</em>
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-upload"></i> Upload Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 bg-light">
+            <div class="card-body text-center">
+                <i class="bi bi-file-earmark-spreadsheet text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Bulk Import</h5>
+                <p class="card-text text-muted">
+                    Import multiple components from a spreadsheet.
+                    <br><em>Coming soon...</em>
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-upload"></i> Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

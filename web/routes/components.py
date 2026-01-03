@@ -2,8 +2,8 @@
 Component routes for HPS SVT Tracker web interface
 Handles component listing and detail views
 """
-from flask import Blueprint, render_template, request, g, abort
-from hps_svt_tracker.models import Component, TestResult, get_maintenance_logs, get_connections_for_component
+from flask import Blueprint, render_template, request, g, abort, redirect, url_for, flash
+from hps_svt_tracker.models import Component, TestResult, get_maintenance_logs, get_connections_for_component, get_component_images
 
 
 components_bp = Blueprint('components', __name__)
@@ -60,6 +60,7 @@ def component_detail(component_id):
     tests = TestResult.get_for_component(component_id, g.db)
     logs = get_maintenance_logs(component_id, g.db)
     connections = get_connections_for_component(component_id, g.db)
+    images = get_component_images(component_id, g.db)
 
     # Get installation history
     with g.db.get_connection() as conn:
@@ -89,4 +90,27 @@ def component_detail(component_id):
                          logs=logs,
                          connections=connections,
                          installations=installations,
-                         assembly_info=assembly_info)
+                         assembly_info=assembly_info,
+                         images=images,
+                         statuses=Component.STATUSES)
+
+
+@components_bp.route('/<component_id>/update-status', methods=['POST'])
+def update_status(component_id):
+    """Update a component's status"""
+
+    # Get the component
+    component = Component.get(component_id, g.db)
+    if not component:
+        abort(404, description=f"Component '{component_id}' not found")
+
+    new_status = request.form.get('status')
+
+    if new_status and new_status in Component.STATUSES:
+        component.installation_status = new_status
+        component.save(g.db)
+        flash(f'Status updated to "{new_status}"', 'success')
+    else:
+        flash('Invalid status', 'danger')
+
+    return redirect(url_for('components.component_detail', component_id=component_id))

@@ -14,14 +14,28 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
+    <!-- Edit mode: toggle visibility based on body class -->
+    <style>
+        body:not(.edit-mode) .edit-mode-only { display: none !important; }
+        body.edit-mode .view-mode-only { display: none !important; }
+    </style>
+
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <script>
+        // Apply edit mode class immediately before any content renders
+        if (localStorage.getItem('hps_edit_mode') === 'true') {
+            document.body.classList.add('edit-mode');
+        }
+    </script>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-hps-primary">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="bi bi-diagram-3"></i> HPS SVT Tracker
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('main.index') }}">
+                <img src="https://confluence.slac.stanford.edu/download/attachments/84248492/hpsg?version=10&modificationDate=1339554728000&api=v2"
+                     alt="HPS Logo" height="32" class="me-2" id="hps-logo" style="cursor: pointer;">
+                HPS SVT Tracker
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
                     aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,7 +55,17 @@
                             <i class="bi bi-cpu"></i> Components
                         </a>
                     </li>
+                    <li class="nav-item edit-mode-only">
+                        <a class="nav-link {% if request.endpoint and request.endpoint.startswith('upload.') %}active{% endif %}"
+                           href="{{ url_for('upload.index') }}">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                    </li>
                 </ul>
+                <a class="nav-link text-light ms-auto" href="https://github.com/mgignac/hps-svt-tracker"
+                   target="_blank" title="View on GitHub">
+                    <i class="bi bi-github fs-5"></i>
+                </a>
             </div>
         </div>
     </nav>
@@ -77,6 +101,43 @@
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Edit Mode Toggle -->
+    <script>
+        (function() {
+            const EDIT_MODE_KEY = 'hps_edit_mode';
+
+            function isEditMode() {
+                return localStorage.getItem(EDIT_MODE_KEY) === 'true';
+            }
+
+            function applyEditMode(enabled) {
+                if (enabled) {
+                    document.body.classList.add('edit-mode');
+                } else {
+                    document.body.classList.remove('edit-mode');
+                }
+            }
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                // Apply initial edit mode state
+                applyEditMode(isEditMode());
+
+                // Logo click handler
+                const logo = document.getElementById('hps-logo');
+                if (logo) {
+                    logo.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const newMode = !isEditMode();
+                        localStorage.setItem(EDIT_MODE_KEY, newMode);
+                        applyEditMode(newMode);
+                    });
+                }
+            });
+        })();
+    </script>
 
     {% block extra_js %}{% endblock %}
 </body>
