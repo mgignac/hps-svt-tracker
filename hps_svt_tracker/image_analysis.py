@@ -186,31 +186,36 @@ def extract_edge_measurements(image_path: str) -> Dict[str, Any]:
     }
 
     try:
-        # Extract text from image
-        # Try different PSM modes if the first one fails
-        text = ''
-        for psm in [6, 11, 3]:  # Try block, sparse, then auto
+        # Extract text from image using multiple PSM modes
+        # Different modes work better for different image layouts
+        # Try all modes and use the one that finds the most measurements
+        best_measurements = []
+        best_text = ''
+
+        for psm in [3, 4, 6, 11, 12]:  # Try various modes
             try:
                 text = extract_text_from_image(image_path, config=f'--psm {psm}')
-                if 'Point' in text or 'um' in text.lower():
-                    break  # Found measurement-like text
+                measurements = extract_measure_result_dialog(text)
+
+                # Keep the result with the most measurements
+                if len(measurements) > len(best_measurements):
+                    best_measurements = measurements
+                    best_text = text
+
             except Exception:
                 continue
 
-        result['raw_text'] = text
+        result['raw_text'] = best_text
+        result['measurements'] = best_measurements
 
-        # Parse measurements
-        measurements = extract_measure_result_dialog(text)
-        result['measurements'] = measurements
-
-        if measurements:
-            values = [m['value'] for m in measurements]
+        if best_measurements:
+            values = [m['value'] for m in best_measurements]
             result['summary'] = {
                 'mean': round(sum(values) / len(values), 2),
                 'min': min(values),
                 'max': max(values),
                 'count': len(values),
-                'unit': measurements[0]['unit']
+                'unit': best_measurements[0]['unit']
             }
             result['success'] = True
         else:
