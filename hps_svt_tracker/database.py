@@ -101,29 +101,46 @@ class Database:
                     component_id TEXT NOT NULL,
                     test_date TIMESTAMP NOT NULL,
                     test_type TEXT NOT NULL,
-                    
-                    -- Simple measurements
+
+                    -- Simple measurements (indexed for queries)
                     pass_fail BOOLEAN,
                     voltage_measured REAL,
                     current_measured REAL,
                     noise_level REAL,
                     temperature REAL,
-                    
-                    -- Complex data as JSON
+
+                    -- Complex measurements/results as JSON
+                    -- Each entry can be a value or a dict with metadata:
+                    -- e.g., {"leakage_current": 1.2e-9} or
+                    -- {"leakage_current": {"value": 1.2e-9, "unit": "A", "description": "..."}}
                     measurements_json TEXT,
-                    
-                    -- File references (relative paths from data_dir)
-                    image_paths TEXT,
-                    data_file_path TEXT,
-                    
+
                     -- Metadata
                     tested_by TEXT,
                     test_setup TEXT,
                     test_conditions TEXT,
                     notes TEXT,
-                    
+
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (component_id) REFERENCES components(id)
+                )
+            """)
+
+            # Test files table - stores all files associated with a test
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS test_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_id INTEGER NOT NULL,
+                    file_type TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    original_filename TEXT,
+                    description TEXT,
+                    file_size INTEGER,
+                    metadata_json TEXT,
+                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (test_id) REFERENCES test_results(id) ON DELETE CASCADE,
+                    CHECK (file_type IN ('raw_data', 'plot', 'image', 'log', 'other'))
                 )
             """)
             
@@ -162,6 +179,20 @@ class Database:
                     CHECK (severity IN ('critical', 'warning', 'info'))
                 )
             """)
+
+            # Component images table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS component_images (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    component_id TEXT NOT NULL,
+                    image_path TEXT NOT NULL,
+                    description TEXT,
+                    uploaded_by TEXT,
+                    upload_date TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (component_id) REFERENCES components(id)
+                )
+            """)
             
             # Create useful indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_components_type ON components(type)")
@@ -169,16 +200,21 @@ class Database:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_components_position ON components(installed_position)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_test_results_component ON test_results(component_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_test_results_date ON test_results(test_date)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_test_files_test ON test_files(test_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_test_files_type ON test_files(file_type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_installation_history_component ON installation_history(component_id)")
-            
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_component_images_component ON component_images(component_id)")
+
             conn.commit()
     
     def reset_database(self):
         """Drop all tables and recreate schema - USE WITH CAUTION"""
         with self.get_connection() as conn:
-            # Drop all tables
+            # Drop all tables (order matters due to foreign keys)
+            conn.execute("DROP TABLE IF EXISTS component_images")
             conn.execute("DROP TABLE IF EXISTS maintenance_log")
             conn.execute("DROP TABLE IF EXISTS connections")
+            conn.execute("DROP TABLE IF EXISTS test_files")
             conn.execute("DROP TABLE IF EXISTS test_results")
             conn.execute("DROP TABLE IF EXISTS installation_history")
             conn.execute("DROP TABLE IF EXISTS components")

@@ -328,27 +328,33 @@ def show_test(ctx, test_id):
         click.echo(f"{'='*60}")
         click.echo(test['test_conditions'])
 
-    # Files
-    image_paths = json.loads(test['image_paths']) if test['image_paths'] else []
-    data_file_path = test['data_file_path']
+    # Files from test_files table
+    files_by_type = TestResult.get_files_by_type(test_id, db=db)
+    has_files = any(files_by_type.values())
 
-    if image_paths or data_file_path:
+    if has_files:
         click.echo(f"\n{'='*60}")
         click.echo(f"Associated Files")
         click.echo(f"{'='*60}")
 
-        if image_paths:
-            click.echo(f"\nImages ({len(image_paths)}):")
-            for img_path in image_paths:
-                full_path = os.path.join(db.data_dir, img_path)
-                exists = "✓" if os.path.exists(full_path) else "✗"
-                click.echo(f"  {exists} {full_path}")
+        file_type_labels = {
+            'raw_data': 'Raw Data Files',
+            'plot': 'Plots',
+            'image': 'Images',
+            'log': 'Log Files',
+            'other': 'Other Files'
+        }
 
-        if data_file_path:
-            full_path = os.path.join(db.data_dir, data_file_path)
-            exists = "✓" if os.path.exists(full_path) else "✗"
-            click.echo(f"\nData file:")
-            click.echo(f"  {exists} {full_path}")
+        for file_type, files in files_by_type.items():
+            if files:
+                label = file_type_labels.get(file_type, file_type)
+                click.echo(f"\n{label} ({len(files)}):")
+                for f in files:
+                    full_path = os.path.join(db.data_dir, f['file_path'])
+                    exists = "✓" if os.path.exists(full_path) else "✗"
+                    size_kb = f['file_size'] / 1024 if f['file_size'] else 0
+                    click.echo(f"  {exists} {f['original_filename']} ({size_kb:.1f} KB)")
+                    click.echo(f"      {full_path}")
 
     # Notes
     if test['notes']:
@@ -369,13 +375,15 @@ def show_test(ctx, test_id):
 @click.option('--current', type=float, help='Current measurement')
 @click.option('--noise', type=float, help='Noise level')
 @click.option('--temp', type=float, help='Temperature')
-@click.option('--images', multiple=True, help='Image file paths')
-@click.option('--data-file', help='Data file path')
+@click.option('--raw-data', multiple=True, help='Raw data file paths')
+@click.option('--plot', multiple=True, help='Plot/processed output file paths')
+@click.option('--image', multiple=True, help='Image file paths')
+@click.option('--log-file', multiple=True, help='Log file paths')
 @click.option('--tested-by', default=None, help='Who performed the test (defaults to current user)')
 @click.option('--notes', help='Test notes')
 @click.pass_context
 def test(ctx, component_id, test_type, test_pass, test_fail, voltage,
-         current, noise, temp, images, data_file, tested_by, notes):
+         current, noise, temp, raw_data, plot, image, log_file, tested_by, notes):
     """Record a test result for a component"""
     db = ctx.obj['db']
 
@@ -407,14 +415,24 @@ def test(ctx, component_id, test_type, test_pass, test_fail, voltage,
     if temp is not None:
         measurements['temperature'] = temp
 
+    # Build files dict
+    files = {}
+    if raw_data:
+        files['raw_data'] = list(raw_data)
+    if plot:
+        files['plot'] = list(plot)
+    if image:
+        files['image'] = list(image)
+    if log_file:
+        files['log'] = list(log_file)
+
     # Create test result
     test_result = TestResult(
         component_id=component_id,
         test_type=test_type,
         pass_fail=pass_fail,
         measurements=measurements,
-        image_files=list(images) if images else None,
-        data_file=data_file,
+        files=files if files else None,
         tested_by=tested_by,
         notes=notes
     )
@@ -422,10 +440,14 @@ def test(ctx, component_id, test_type, test_pass, test_fail, voltage,
     test_id = test_result.save(db)
     click.echo(f"Test result recorded (ID: {test_id})")
 
-    if test_result.stored_image_paths:
-        click.echo(f"Stored {len(test_result.stored_image_paths)} images")
-    if test_result.stored_data_path:
-        click.echo(f"Stored data file: {test_result.stored_data_path}")
+    if test_result.stored_files:
+        # Count files by type
+        type_counts = {}
+        for f in test_result.stored_files:
+            ft = f['file_type']
+            type_counts[ft] = type_counts.get(ft, 0) + 1
+        for ft, count in type_counts.items():
+            click.echo(f"Stored {count} {ft} file(s)")
 
 
 @cli.command()

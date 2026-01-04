@@ -19,22 +19,29 @@ def test_detail(test_id):
     if not test:
         abort(404, description=f"Test result #{test_id} not found")
 
-    # Parse JSON fields if they exist
-    image_paths = []
-    if test.image_paths:
-        try:
-            image_paths = json.loads(test.image_paths)
-        except (json.JSONDecodeError, TypeError):
-            image_paths = []
+    # Get files organized by type
+    files_by_type = TestResult.get_files_by_type(test_id, db=g.db)
 
+    # Parse metadata_json for each file
+    for file_type, files in files_by_type.items():
+        for f in files:
+            if f.get('metadata_json'):
+                try:
+                    f['metadata_json'] = json.loads(f['metadata_json'])
+                except (json.JSONDecodeError, TypeError):
+                    f['metadata_json'] = {}
+            else:
+                f['metadata_json'] = {}
+
+    # Parse measurements JSON if it exists
     measurements_dict = {}
-    if test.measurements:
+    if test.get('measurements_json'):
         try:
-            measurements_dict = json.loads(test.measurements)
+            measurements_dict = json.loads(test['measurements_json'])
         except (json.JSONDecodeError, TypeError):
             measurements_dict = {}
 
     return render_template('tests/detail.html',
                          test=test,
-                         image_paths=image_paths,
+                         files_by_type=files_by_type,
                          measurements_dict=measurements_dict)

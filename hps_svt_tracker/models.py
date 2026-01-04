@@ -184,61 +184,135 @@ class Component:
     def __repr__(self):
         return f"Component(id='{self.id}', type='{self.type}', status='{self.installation_status}')"
 
+    # Attribute convenience methods
+    def get_attribute(self, key: str, default: Any = None) -> Any:
+        """
+        Get a single attribute value
+
+        Args:
+            key: Attribute key
+            default: Default value if key not found
+
+        Returns:
+            Attribute value or default
+        """
+        return self.attributes.get(key, default)
+
+    def set_attribute(self, key: str, value: Any):
+        """
+        Set a single attribute value
+
+        Args:
+            key: Attribute key
+            value: Attribute value
+        """
+        self.attributes[key] = value
+
+    def update_attributes(self, new_attributes: Dict[str, Any], overwrite: bool = True):
+        """
+        Update multiple attributes at once
+
+        Args:
+            new_attributes: Dictionary of attributes to add/update
+            overwrite: If True, overwrite existing keys. If False, only add new keys.
+        """
+        if overwrite:
+            self.attributes.update(new_attributes)
+        else:
+            for key, value in new_attributes.items():
+                if key not in self.attributes:
+                    self.attributes[key] = value
+
+    def remove_attribute(self, key: str) -> Any:
+        """
+        Remove an attribute and return its value
+
+        Args:
+            key: Attribute key to remove
+
+        Returns:
+            Removed value, or None if key didn't exist
+        """
+        return self.attributes.pop(key, None)
+
+    def list_attributes(self) -> List[str]:
+        """
+        Get list of all attribute keys
+
+        Returns:
+            List of attribute key names
+        """
+        return list(self.attributes.keys())
+
 
 class TestResult:
     """Represents a test result for a component"""
-    
+
+    # Valid file types for test files
+    FILE_TYPES = ['raw_data', 'plot', 'image', 'log', 'other']
+
     def __init__(self, component_id: str, test_type: str,
                  test_date: Optional[datetime] = None,
                  pass_fail: Optional[bool] = None,
                  measurements: Optional[Dict[str, Any]] = None,
-                 image_files: Optional[List[str]] = None,
-                 data_file: Optional[str] = None,
+                 files: Optional[Dict[str, List[str]]] = None,
                  **kwargs):
         """
         Initialize a test result
-        
+
         Args:
             component_id: ID of component being tested
             test_type: Type of test (e.g., 'iv_curve', 'noise_test')
             test_date: When test was performed (defaults to now)
             pass_fail: Test pass/fail status
-            measurements: Dictionary of measurements
-            image_files: List of image file paths
-            data_file: Path to data file (CSV, HDF5, etc.)
+            measurements: Dictionary of measurements. Each entry can be:
+                - A simple value: {"leakage_current": 1.2e-9}
+                - A dict with metadata: {"leakage_current": {"value": 1.2e-9, "unit": "A"}}
+            files: Dictionary of file paths organized by type:
+                {
+                    'raw_data': ['path/to/data1.csv', 'path/to/data2.dat'],
+                    'plot': ['path/to/plot1.png', 'path/to/plot2.png'],
+                    'image': ['path/to/photo.jpg'],
+                    'log': ['path/to/test.log'],
+                    'other': ['path/to/other.txt']
+                }
         """
         self.component_id = component_id
         self.test_type = test_type
         self.test_date = test_date or datetime.now()
         self.pass_fail = pass_fail
         self.measurements = measurements or {}
-        self.image_files = image_files or []
-        self.data_file = data_file
+        self.files = files or {}
         self.tested_by = kwargs.get('tested_by')
         self.test_setup = kwargs.get('test_setup')
         self.test_conditions = kwargs.get('test_conditions')
         self.notes = kwargs.get('notes')
-        
+
         # Will be populated when saved
         self.id = None
-        self.stored_image_paths = []
-        self.stored_data_path = None
-    
+        self.stored_files = []  # List of stored file records
+
     def save(self, db: Optional[Database] = None):
         """Save test result to database and copy files to organized storage"""
         if db is None:
             db = get_default_db()
-        
-        # Organize and store files
-        if self.image_files or self.data_file:
-            self._store_files(db)
-        
+
         # Extract simple measurements for indexed columns
         voltage = self.measurements.get('voltage_measured')
         current = self.measurements.get('current_measured')
         noise = self.measurements.get('noise_level')
         temp = self.measurements.get('temperature')
-        
+
+        # Handle measurements that might be dicts with metadata
+        if isinstance(voltage, dict):
+            voltage = voltage.get('value')
+        if isinstance(current, dict):
+            current = current.get('value')
+        if isinstance(noise, dict):
+            noise = noise.get('value')
+        if isinstance(temp, dict):
+            temp = temp.get('value')
+
         data = {
             'component_id': self.component_id,
             'test_date': self.test_date.isoformat(),
@@ -249,14 +323,12 @@ class TestResult:
             'noise_level': noise,
             'temperature': temp,
             'measurements_json': json.dumps(self.measurements) if self.measurements else None,
-            'image_paths': json.dumps(self.stored_image_paths) if self.stored_image_paths else None,
-            'data_file_path': self.stored_data_path,
             'tested_by': self.tested_by,
             'test_setup': self.test_setup,
             'test_conditions': self.test_conditions,
             'notes': self.notes,
         }
-        
+
         with db.get_connection() as conn:
             columns = ", ".join(data.keys())
             placeholders = ", ".join(["?" for _ in data])
@@ -266,43 +338,138 @@ class TestResult:
             )
             self.id = cursor.lastrowid
             conn.commit()
-        
+
+        # Store files after we have the test ID
+        if self.files:
+            self._store_files(db)
+
         return self.id
-    
+
     def _store_files(self, db: Database):
-        """Copy files to organized storage and record paths"""
-        # Create storage directory: data_dir/YYYY/component_id/
-        storage_dir = os.path.join(
+        """Copy files to organized storage and record in test_files table"""
+        # Create storage directory: data_dir/YYYY/component_id/YYYYMMDD_HHMMSS_testtype/
+        test_dir = os.path.join(
             db.data_dir,
             self.test_date.strftime("%Y"),
-            self.component_id
+            self.component_id,
+            f"{self.test_date.strftime('%Y%m%d_%H%M%S')}_{self.test_type}"
         )
-        os.makedirs(storage_dir, exist_ok=True)
-        
-        # Store images
-        if self.image_files:
-            for i, img_path in enumerate(self.image_files):
-                if not os.path.exists(img_path):
-                    print(f"Warning: Image file not found: {img_path}")
+
+        with db.get_connection() as conn:
+            for file_type, file_paths in self.files.items():
+                if file_type not in self.FILE_TYPES:
+                    print(f"Warning: Invalid file type '{file_type}', skipping")
                     continue
-                
-                # Create descriptive filename
-                ext = Path(img_path).suffix
-                filename = f"{self.test_date.strftime('%Y%m%d_%H%M%S')}_{self.test_type}_{i}{ext}"
-                dest_path = os.path.join(storage_dir, filename)
-                shutil.copy2(img_path, dest_path)
-                
-                # Store relative path
-                rel_path = os.path.relpath(dest_path, db.data_dir)
-                self.stored_image_paths.append(rel_path)
-        
-        # Store data file
-        if self.data_file and os.path.exists(self.data_file):
-            ext = Path(self.data_file).suffix
-            filename = f"{self.test_date.strftime('%Y%m%d_%H%M%S')}_{self.test_type}_data{ext}"
-            dest_path = os.path.join(storage_dir, filename)
-            shutil.copy2(self.data_file, dest_path)
-            self.stored_data_path = os.path.relpath(dest_path, db.data_dir)
+
+                # Create subdirectory for this file type
+                type_dir = os.path.join(test_dir, file_type)
+                os.makedirs(type_dir, exist_ok=True)
+
+                for file_path in file_paths:
+                    if not os.path.exists(file_path):
+                        print(f"Warning: File not found: {file_path}")
+                        continue
+
+                    # Get original filename and size
+                    original_filename = Path(file_path).name
+                    file_size = os.path.getsize(file_path)
+
+                    # Copy file to storage
+                    dest_path = os.path.join(type_dir, original_filename)
+
+                    # Handle duplicate filenames
+                    counter = 1
+                    while os.path.exists(dest_path):
+                        name, ext = os.path.splitext(original_filename)
+                        dest_path = os.path.join(type_dir, f"{name}_{counter}{ext}")
+                        counter += 1
+
+                    shutil.copy2(file_path, dest_path)
+
+                    # Store relative path
+                    rel_path = os.path.relpath(dest_path, db.data_dir)
+
+                    # Insert into test_files table
+                    conn.execute("""
+                        INSERT INTO test_files
+                        (test_id, file_type, file_path, original_filename, file_size)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (self.id, file_type, rel_path, original_filename, file_size))
+
+                    self.stored_files.append({
+                        'file_type': file_type,
+                        'file_path': rel_path,
+                        'original_filename': original_filename,
+                        'file_size': file_size
+                    })
+
+            conn.commit()
+
+    def add_file(self, file_path: str, file_type: str,
+                 description: Optional[str] = None,
+                 metadata: Optional[Dict[str, Any]] = None,
+                 db: Optional[Database] = None) -> int:
+        """
+        Add a file to an existing test result
+
+        Args:
+            file_path: Path to the file to add
+            file_type: Type of file ('raw_data', 'plot', 'image', 'log', 'other')
+            description: Optional description of the file
+            metadata: Optional metadata dict for the file
+            db: Database instance
+
+        Returns:
+            file_id: ID of the created test_files record
+        """
+        if self.id is None:
+            raise ValueError("Test result must be saved before adding files")
+
+        if file_type not in self.FILE_TYPES:
+            raise ValueError(f"Invalid file type: {file_type}. Must be one of {self.FILE_TYPES}")
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        if db is None:
+            db = get_default_db()
+
+        # Create storage directory
+        test_dir = os.path.join(
+            db.data_dir,
+            self.test_date.strftime("%Y"),
+            self.component_id,
+            f"{self.test_date.strftime('%Y%m%d_%H%M%S')}_{self.test_type}",
+            file_type
+        )
+        os.makedirs(test_dir, exist_ok=True)
+
+        # Get file info
+        original_filename = Path(file_path).name
+        file_size = os.path.getsize(file_path)
+
+        # Copy file
+        dest_path = os.path.join(test_dir, original_filename)
+        counter = 1
+        while os.path.exists(dest_path):
+            name, ext = os.path.splitext(original_filename)
+            dest_path = os.path.join(test_dir, f"{name}_{counter}{ext}")
+            counter += 1
+
+        shutil.copy2(file_path, dest_path)
+        rel_path = os.path.relpath(dest_path, db.data_dir)
+
+        # Insert into database
+        with db.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO test_files
+                (test_id, file_type, file_path, original_filename, description,
+                 file_size, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (self.id, file_type, rel_path, original_filename, description,
+                  file_size, json.dumps(metadata) if metadata else None))
+            conn.commit()
+            return cursor.lastrowid
     
     @classmethod
     def get_by_id(cls, test_id: int, db: Optional[Database] = None) -> Optional[Dict[str, Any]]:
@@ -319,6 +486,59 @@ class TestResult:
             if row:
                 return dict(row)
             return None
+
+    @classmethod
+    def get_files(cls, test_id: int, file_type: Optional[str] = None,
+                  db: Optional[Database] = None) -> List[Dict[str, Any]]:
+        """
+        Get files associated with a test result
+
+        Args:
+            test_id: ID of the test result
+            file_type: Optional filter by file type ('raw_data', 'plot', 'image', 'log', 'other')
+            db: Database instance
+
+        Returns:
+            List of file records
+        """
+        if db is None:
+            db = get_default_db()
+
+        with db.get_connection() as conn:
+            if file_type:
+                rows = conn.execute("""
+                    SELECT * FROM test_files
+                    WHERE test_id = ? AND file_type = ?
+                    ORDER BY upload_date DESC
+                """, (test_id, file_type)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT * FROM test_files
+                    WHERE test_id = ?
+                    ORDER BY file_type, upload_date DESC
+                """, (test_id,)).fetchall()
+
+            return [dict(row) for row in rows]
+
+    @classmethod
+    def get_files_by_type(cls, test_id: int,
+                          db: Optional[Database] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get files associated with a test result, organized by type
+
+        Args:
+            test_id: ID of the test result
+            db: Database instance
+
+        Returns:
+            Dict with file types as keys and lists of file records as values
+        """
+        files = cls.get_files(test_id, db=db)
+        result = {ft: [] for ft in cls.FILE_TYPES}
+        for f in files:
+            if f['file_type'] in result:
+                result[f['file_type']].append(f)
+        return result
 
     @classmethod
     def get_for_component(cls, component_id: str, db: Optional[Database] = None) -> List[Dict[str, Any]]:
@@ -761,3 +981,28 @@ def disassemble_module(module_id: str,
         logged_by=disassembled_by,
         db=db
     )
+
+
+def get_component_images(component_id: str,
+                         db: Optional[Database] = None) -> List[Dict[str, Any]]:
+    """
+    Get all images for a component
+
+    Args:
+        component_id: ID of the component
+        db: Database instance
+
+    Returns:
+        List of image records ordered by upload date (newest first)
+    """
+    if db is None:
+        db = get_default_db()
+
+    with db.get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM component_images
+            WHERE component_id = ?
+            ORDER BY upload_date DESC
+        """, (component_id,)).fetchall()
+
+        return [dict(row) for row in rows]

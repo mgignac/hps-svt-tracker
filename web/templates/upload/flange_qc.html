@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Flange QC Test - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Flange QC Test</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-diagram-3"></i> Upload Flange QC Test</h1>
+        <p class="text-muted">Upload O20 noise/baseline plots for flange board data inputs (J1, J3, J5)</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <form method="post" enctype="multipart/form-data">
+            <!-- Component Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cpu"></i> Flange Board</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Flange Board ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a flange board ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Only flange board components are shown</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="feb_serial" class="form-label">FEB Serial Number</label>
+                        <input type="text" class="form-control" id="feb_serial" name="feb_serial"
+                               placeholder="e.g., FEB-001">
+                        <div class="form-text">Serial number of the FEB used for testing</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Result -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Test Result</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Pass/Fail Status</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_pass" value="pass">
+                                <label class="form-check-label text-success" for="pass_fail_pass">
+                                    <i class="bi bi-check-circle"></i> Pass
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_fail" value="fail">
+                                <label class="form-check-label text-danger" for="pass_fail_fail">
+                                    <i class="bi bi-x-circle"></i> Fail
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_na" value="" checked>
+                                <label class="form-check-label text-muted" for="pass_fail_na">
+                                    N/A
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tar File Uploads -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-zip"></i> O20 Plot Archives</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Upload a .tar file containing the O20 noise/baseline plots for each data input.
+                        Each tar file should contain the image files (PNG, JPG, etc.) for that input.
+                    </p>
+
+                    <!-- J1 Data Input -->
+                    <div class="mb-4">
+                        <label for="j1_tar" class="form-label">
+                            <i class="bi bi-1-circle text-primary"></i> J1 Data Input
+                        </label>
+                        <input type="file" class="form-control" id="j1_tar" name="j1_tar"
+                               accept=".tar,.tar.gz,.tgz">
+                        <div class="form-text">Tar archive containing J1 plots</div>
+                    </div>
+
+                    <!-- J3 Data Input -->
+                    <div class="mb-4">
+                        <label for="j3_tar" class="form-label">
+                            <i class="bi bi-3-circle text-primary"></i> J3 Data Input
+                        </label>
+                        <input type="file" class="form-control" id="j3_tar" name="j3_tar"
+                               accept=".tar,.tar.gz,.tgz">
+                        <div class="form-text">Tar archive containing J3 plots</div>
+                    </div>
+
+                    <!-- J5 Data Input -->
+                    <div class="mb-4">
+                        <label for="j5_tar" class="form-label">
+                            <i class="bi bi-5-circle text-primary"></i> J5 Data Input
+                        </label>
+                        <input type="file" class="form-control" id="j5_tar" name="j5_tar"
+                               accept=".tar,.tar.gz,.tgz">
+                        <div class="form-text">Tar archive containing J5 plots</div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i>
+                        At least one tar file is required. Only image files (PNG, JPG, GIF, BMP, TIFF) will be extracted.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Metadata -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Test Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="tested_by" class="form-label">Tested By</label>
+                        <input type="text" class="form-control" id="tested_by" name="tested_by"
+                               placeholder="Leave blank for current user">
+                        <div class="form-text">Defaults to your system username</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                                  placeholder="Any additional observations or comments"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-upload"></i> Submit Flange QC Test
+                </button>
+                <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary btn-lg">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Flange QC Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6>What is a Flange QC Test?</h6>
+                <p class="small">
+                    This test verifies the data inputs on a flange board by connecting a fully loaded
+                    FEB and performing electrical testing on each input (J1, J3, J5).
+                </p>
+
+                <hr>
+
+                <h6>Data Inputs</h6>
+                <ul class="small">
+                    <li><strong>J1</strong> - First data input connector</li>
+                    <li><strong>J3</strong> - Second data input connector</li>
+                    <li><strong>J5</strong> - Third data input connector</li>
+                </ul>
+
+                <hr>
+
+                <h6>O20 Plots</h6>
+                <p class="small">
+                    Each data input produces noise and baseline plots (O20 plots) that characterize
+                    the channel behavior. These are packaged in tar files for upload.
+                </p>
+
+                <hr>
+
+                <h6>Expected Tar Contents</h6>
+                <p class="small mb-0">
+                    Each tar file should contain image files showing:
+                </p>
+                <ul class="small">
+                    <li>Channel noise distributions</li>
+                    <li>Baseline measurements</li>
+                    <li>Any other diagnostic plots</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

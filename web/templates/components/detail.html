@@ -26,7 +26,7 @@
             <div class="col-md-6">
                 <dl class="row">
                     <dt class="col-sm-4">Type:</dt>
-                    <dd class="col-sm-8">{{ component.type }}</dd>
+                    <dd class="col-sm-8">{{ component.type|display_type }}</dd>
 
                     <dt class="col-sm-4">Serial Number:</dt>
                     <dd class="col-sm-8">{{ component.serial_number or 'N/A' }}</dd>
@@ -92,7 +92,7 @@
                         <dt class="col-sm-5">Assembled On:</dt>
                         <dd class="col-sm-7">
                             <a href="{{ url_for('components.component_detail', component_id=assembly_info.id) }}">
-                                {{ assembly_info.id }} ({{ assembly_info.type }})
+                                {{ assembly_info.id }} ({{ assembly_info.type|display_type }})
                             </a>
                         </dd>
                     {% endif %}

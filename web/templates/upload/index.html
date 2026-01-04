@@ -43,18 +43,99 @@
         </div>
     </div>
 
-    <!-- Placeholder for future upload types -->
+    <!-- IV Test Upload Card -->
     <div class="col-md-4 mb-4">
-        <div class="card h-100 bg-light">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
             <div class="card-body text-center">
-                <i class="bi bi-file-earmark-text text-muted" style="font-size: 3rem;"></i>
-                <h5 class="card-title mt-3 text-muted">Test Data</h5>
+                <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">IV Test Result</h5>
                 <p class="card-text text-muted">
-                    Upload test data files (CSV, HDF5, etc.) for components.
-                    <br><em>Coming soon...</em>
+                    Upload a current-voltage (IV) test measurement including raw data,
+                    plots, and key measurements.
+                </p>
+                <a href="{{ url_for('upload.iv_test') }}" class="btn btn-success">
+                    <i class="bi bi-upload"></i> Upload IV Test
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-graph-up text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">IV Test Result</h5>
+                <p class="card-text text-muted">
+                    Upload a current-voltage (IV) test measurement including raw data,
+                    plots, and key measurements.
                 </p>
                 <button class="btn btn-secondary" disabled>
-                    <i class="bi bi-upload"></i> Upload Data
+                    <i class="bi bi-upload"></i> Upload IV Test
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edge Imaging Test Upload Card -->
+    <div class="col-md-4 mb-4">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-rulers text-info" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Edge Imaging Test</h5>
+                <p class="card-text text-muted">
+                    Upload edge imaging analysis with automatic measurement extraction
+                    from microscope screenshots.
+                </p>
+                <a href="{{ url_for('upload.edge_imaging') }}" class="btn btn-info">
+                    <i class="bi bi-upload"></i> Upload Edge Imaging
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-rulers text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Edge Imaging Test</h5>
+                <p class="card-text text-muted">
+                    Upload edge imaging analysis with automatic measurement extraction
+                    from microscope screenshots.
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-upload"></i> Upload Edge Imaging
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Flange QC Test Upload Card -->
+    <div class="col-md-4 mb-4">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-diagram-3 text-warning" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Flange QC Test</h5>
+                <p class="card-text text-muted">
+                    Upload O20 noise/baseline plots for flange board data inputs
+                    (J1, J3, J5) from tar archives.
+                </p>
+                <a href="{{ url_for('upload.flange_qc') }}" class="btn btn-warning">
+                    <i class="bi bi-upload"></i> Upload Flange QC
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-diagram-3 text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Flange QC Test</h5>
+                <p class="card-text text-muted">
+                    Upload O20 noise/baseline plots for flange board data inputs
+                    (J1, J3, J5) from tar archives.
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-upload"></i> Upload Flange QC
                 </button>
             </div>
         </div>

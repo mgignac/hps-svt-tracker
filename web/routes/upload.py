@@ -1,26 +1,61 @@
 """
 Upload routes for HPS SVT Tracker web interface
-Handles file uploads including component images
+Handles file uploads including component images and test results
 """
 import os
 import getpass
+import tempfile
+import tarfile
+import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, render_template, request, g, redirect, url_for, flash
 from werkzeug.utils import secure_filename
-from hps_svt_tracker.models import Component
+from hps_svt_tracker.models import Component, TestResult
 
 
 upload_bp = Blueprint('upload', __name__)
 
 # Allowed image extensions
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif'}
+
+# Allowed data file extensions
+ALLOWED_DATA_EXTENSIONS = {'csv', 'txt', 'dat', 'tsv', 'hdf5', 'h5', 'root', 'json'}
+
+# Legacy alias
+ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS
 
 
-def allowed_file(filename):
+def allowed_file(filename, allowed_extensions=None):
     """Check if file has an allowed extension"""
+    if allowed_extensions is None:
+        allowed_extensions = ALLOWED_EXTENSIONS
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+           filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+
+def allowed_image(filename):
+    """Check if file is an allowed image type"""
+    return allowed_file(filename, ALLOWED_IMAGE_EXTENSIONS)
+
+
+def allowed_data(filename):
+    """Check if file is an allowed data type"""
+    return allowed_file(filename, ALLOWED_DATA_EXTENSIONS)
+
+
+def save_temp_file(uploaded_file):
+    """Save uploaded file to temp directory and return the path"""
+    if not uploaded_file or uploaded_file.filename == '':
+        return None
+
+    # Create a temp file with the original extension
+    ext = Path(uploaded_file.filename).suffix
+    fd, temp_path = tempfile.mkstemp(suffix=ext)
+    os.close(fd)
+    uploaded_file.save(temp_path)
+    return temp_path
 
 
 def get_current_user():
@@ -124,5 +159,527 @@ def picture():
     prefill_component_id = request.args.get('component_id', '')
 
     return render_template('upload/picture.html',
+                         component_ids=component_ids,
+                         prefill_component_id=prefill_component_id)
+
+
+@upload_bp.route('/iv-test', methods=['GET', 'POST'])
+def iv_test():
+    """Upload an IV (Current-Voltage) test result"""
+    if request.method == 'POST':
+        # Get form data
+        component_id = request.form.get('component_id', '').strip()
+        tested_by = request.form.get('tested_by', '').strip() or get_current_user()
+        test_setup = request.form.get('test_setup', '').strip()
+        test_conditions = request.form.get('test_conditions', '').strip()
+        notes = request.form.get('notes', '').strip()
+
+        # Pass/fail
+        pass_fail_value = request.form.get('pass_fail', '')
+        pass_fail = None
+        if pass_fail_value == 'pass':
+            pass_fail = True
+        elif pass_fail_value == 'fail':
+            pass_fail = False
+
+        # Measurements
+        bias_voltage = request.form.get('bias_voltage', '').strip()
+        leakage_current = request.form.get('leakage_current', '').strip()
+        temperature = request.form.get('temperature', '').strip()
+        breakdown_voltage = request.form.get('breakdown_voltage', '').strip()
+
+        # Validate component exists
+        if not component_id:
+            flash('Component ID is required.', 'danger')
+            return redirect(url_for('upload.iv_test'))
+
+        component = Component.get(component_id, g.db)
+        if not component:
+            flash(f"Component '{component_id}' not found.", 'danger')
+            return redirect(url_for('upload.iv_test'))
+
+        # Build measurements dict
+        measurements = {}
+        if bias_voltage:
+            try:
+                measurements['voltage_measured'] = float(bias_voltage)
+            except ValueError:
+                flash('Bias voltage must be a number.', 'danger')
+                return redirect(url_for('upload.iv_test'))
+
+        if leakage_current:
+            try:
+                measurements['current_measured'] = float(leakage_current)
+            except ValueError:
+                flash('Leakage current must be a number.', 'danger')
+                return redirect(url_for('upload.iv_test'))
+
+        if temperature:
+            try:
+                measurements['temperature'] = float(temperature)
+            except ValueError:
+                flash('Temperature must be a number.', 'danger')
+                return redirect(url_for('upload.iv_test'))
+
+        if breakdown_voltage:
+            try:
+                measurements['breakdown_voltage'] = float(breakdown_voltage)
+            except ValueError:
+                flash('Breakdown voltage must be a number.', 'danger')
+                return redirect(url_for('upload.iv_test'))
+
+        # Process file uploads
+        files = {}
+        temp_files = []  # Track temp files for cleanup
+
+        try:
+            # Raw data files
+            raw_data_files = request.files.getlist('raw_data')
+            if raw_data_files:
+                raw_data_paths = []
+                for f in raw_data_files:
+                    if f.filename != '':
+                        if not allowed_data(f.filename):
+                            flash(f"Invalid data file type: {f.filename}", 'warning')
+                            continue
+                        temp_path = save_temp_file(f)
+                        if temp_path:
+                            raw_data_paths.append(temp_path)
+                            temp_files.append(temp_path)
+                if raw_data_paths:
+                    files['raw_data'] = raw_data_paths
+
+            # Plot files
+            plot_files = request.files.getlist('plots')
+            if plot_files:
+                plot_paths = []
+                for f in plot_files:
+                    if f.filename != '':
+                        if not allowed_image(f.filename):
+                            flash(f"Invalid plot file type: {f.filename}", 'warning')
+                            continue
+                        temp_path = save_temp_file(f)
+                        if temp_path:
+                            plot_paths.append(temp_path)
+                            temp_files.append(temp_path)
+                if plot_paths:
+                    files['plot'] = plot_paths
+
+            # Create test result
+            test_result = TestResult(
+                component_id=component_id,
+                test_type='iv_curve',
+                pass_fail=pass_fail,
+                measurements=measurements if measurements else None,
+                files=files if files else None,
+                tested_by=tested_by,
+                test_setup=test_setup or None,
+                test_conditions=test_conditions or None,
+                notes=notes or None
+            )
+
+            test_id = test_result.save(g.db)
+
+            # Build success message
+            file_count = len(test_result.stored_files) if test_result.stored_files else 0
+            msg = f'IV test recorded successfully (Test ID: {test_id})'
+            if file_count > 0:
+                msg += f' with {file_count} file(s)'
+            flash(msg, 'success')
+
+            return redirect(url_for('tests.test_detail', test_id=test_id))
+
+        finally:
+            # Clean up temp files
+            for temp_path in temp_files:
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except Exception:
+                    pass
+
+    # GET request - show the upload form
+    components = Component.list_all(db=g.db)
+    component_ids = [c.id for c in components]
+    prefill_component_id = request.args.get('component_id', '')
+
+    return render_template('upload/iv_test.html',
+                         component_ids=component_ids,
+                         prefill_component_id=prefill_component_id,
+                         allowed_data_extensions=ALLOWED_DATA_EXTENSIONS,
+                         allowed_image_extensions=ALLOWED_IMAGE_EXTENSIONS)
+
+
+@upload_bp.route('/edge-imaging', methods=['GET', 'POST'])
+def edge_imaging():
+    """Upload an edge imaging analysis test result with automatic measurement extraction"""
+    # Import OCR utilities (optional dependency)
+    try:
+        from hps_svt_tracker.image_analysis import (
+            extract_measurements_from_multiple_images,
+            measurements_to_test_format,
+            check_ocr_available
+        )
+        ocr_available = check_ocr_available()
+    except ImportError:
+        ocr_available = False
+
+    if request.method == 'POST':
+        # Get form data
+        component_id = request.form.get('component_id', '').strip()
+        tested_by = request.form.get('tested_by', '').strip() or get_current_user()
+        test_setup = request.form.get('test_setup', '').strip()
+        test_conditions = request.form.get('test_conditions', '').strip()
+        notes = request.form.get('notes', '').strip()
+        extract_measurements = request.form.get('extract_measurements') == 'on'
+
+        # Pass/fail
+        pass_fail_value = request.form.get('pass_fail', '')
+        pass_fail = None
+        if pass_fail_value == 'pass':
+            pass_fail = True
+        elif pass_fail_value == 'fail':
+            pass_fail = False
+
+        # Manual measurements (can be overridden by OCR)
+        edge_gap_mean = request.form.get('edge_gap_mean', '').strip()
+        edge_gap_min = request.form.get('edge_gap_min', '').strip()
+        edge_gap_max = request.form.get('edge_gap_max', '').strip()
+
+        # Validate component exists
+        if not component_id:
+            flash('Component ID is required.', 'danger')
+            return redirect(url_for('upload.edge_imaging'))
+
+        component = Component.get(component_id, g.db)
+        if not component:
+            flash(f"Component '{component_id}' not found.", 'danger')
+            return redirect(url_for('upload.edge_imaging'))
+
+        # Build measurements dict from manual input
+        measurements = {}
+        if edge_gap_mean:
+            try:
+                measurements['edge_gap_mean'] = float(edge_gap_mean)
+            except ValueError:
+                flash('Edge gap mean must be a number.', 'danger')
+                return redirect(url_for('upload.edge_imaging'))
+        if edge_gap_min:
+            try:
+                measurements['edge_gap_min'] = float(edge_gap_min)
+            except ValueError:
+                flash('Edge gap min must be a number.', 'danger')
+                return redirect(url_for('upload.edge_imaging'))
+        if edge_gap_max:
+            try:
+                measurements['edge_gap_max'] = float(edge_gap_max)
+            except ValueError:
+                flash('Edge gap max must be a number.', 'danger')
+                return redirect(url_for('upload.edge_imaging'))
+
+        # Process file uploads
+        files = {}
+        temp_files = []  # Track temp files for cleanup
+        image_temp_paths = []  # For OCR extraction
+
+        try:
+            # Edge imaging files (images with embedded measurements)
+            image_files = request.files.getlist('edge_images')
+            if image_files:
+                image_paths = []
+                for f in image_files:
+                    if f.filename != '':
+                        if not allowed_image(f.filename):
+                            flash(f"Invalid image file type: {f.filename}", 'warning')
+                            continue
+                        temp_path = save_temp_file(f)
+                        if temp_path:
+                            image_paths.append(temp_path)
+                            temp_files.append(temp_path)
+                            image_temp_paths.append(temp_path)
+                if image_paths:
+                    files['image'] = image_paths
+
+            # Attempt OCR measurement extraction if enabled and images provided
+            ocr_result = None
+            if extract_measurements and ocr_available and image_temp_paths:
+                try:
+                    ocr_result = extract_measurements_from_multiple_images(image_temp_paths)
+                    if ocr_result.get('success_count', 0) > 0:
+                        # Merge OCR measurements (they take precedence over manual)
+                        ocr_measurements = measurements_to_test_format(ocr_result)
+                        measurements.update(ocr_measurements)
+                        flash(f"Extracted measurements from {ocr_result['success_count']} image(s). "
+                              f"Found {ocr_result['overall_summary'].get('count', 0)} measurement points.", 'info')
+                    else:
+                        flash("Could not extract measurements from images. "
+                              "Manual measurements will be used.", 'warning')
+                except Exception as e:
+                    flash(f"OCR extraction failed: {str(e)}. Manual measurements will be used.", 'warning')
+
+            # Create test result
+            test_result = TestResult(
+                component_id=component_id,
+                test_type='edge_imaging',
+                pass_fail=pass_fail,
+                measurements=measurements if measurements else None,
+                files=files if files else None,
+                tested_by=tested_by,
+                test_setup=test_setup or None,
+                test_conditions=test_conditions or None,
+                notes=notes or None
+            )
+
+            test_id = test_result.save(g.db)
+
+            # Build success message
+            file_count = len(test_result.stored_files) if test_result.stored_files else 0
+            msg = f'Edge imaging test recorded successfully (Test ID: {test_id})'
+            if file_count > 0:
+                msg += f' with {file_count} file(s)'
+            flash(msg, 'success')
+
+            return redirect(url_for('tests.test_detail', test_id=test_id))
+
+        finally:
+            # Clean up temp files
+            for temp_path in temp_files:
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except Exception:
+                    pass
+
+    # GET request - show the upload form
+    components = Component.list_all(db=g.db)
+    component_ids = [c.id for c in components]
+    prefill_component_id = request.args.get('component_id', '')
+
+    return render_template('upload/edge_imaging.html',
+                         component_ids=component_ids,
+                         prefill_component_id=prefill_component_id,
+                         allowed_image_extensions=ALLOWED_IMAGE_EXTENSIONS,
+                         ocr_available=ocr_available)
+
+
+def extract_images_from_tar(tar_file, temp_dir, data_input):
+    """
+    Extract image files from a tar archive.
+
+    Args:
+        tar_file: Werkzeug FileStorage object
+        temp_dir: Directory to extract files to
+        data_input: Label for the data input (J1, J3, or J5)
+
+    Returns:
+        List of tuples: (temp_path, metadata_dict) for each extracted image
+    """
+    images = []
+
+    if not tar_file or tar_file.filename == '':
+        return images
+
+    # Save tar to temp first
+    tar_temp_path = os.path.join(temp_dir, secure_filename(tar_file.filename))
+    tar_file.save(tar_temp_path)
+
+    try:
+        with tarfile.open(tar_temp_path, mode='r:*') as tf:
+            for member in tf.getmembers():
+                if not member.isfile():
+                    continue
+
+                # Check if it's an image file
+                ext = Path(member.name).suffix.lower().lstrip('.')
+                if ext not in ALLOWED_IMAGE_EXTENSIONS:
+                    continue
+
+                # Extract to temp directory
+                # Use a safe filename to avoid path traversal
+                safe_name = secure_filename(os.path.basename(member.name))
+                if not safe_name:
+                    continue
+
+                # Create unique filename with data input prefix
+                unique_name = f"{data_input}_{safe_name}"
+                extract_path = os.path.join(temp_dir, unique_name)
+
+                # Extract the file
+                with tf.extractfile(member) as src:
+                    if src:
+                        with open(extract_path, 'wb') as dst:
+                            dst.write(src.read())
+
+                # Create metadata for this file
+                metadata = {
+                    'data_input': data_input,
+                    'original_tar': tar_file.filename,
+                    'original_name': os.path.basename(member.name)
+                }
+
+                images.append((extract_path, metadata))
+    except tarfile.TarError as e:
+        # Invalid tar file - will be handled by caller
+        raise ValueError(f"Invalid tar file for {data_input}: {str(e)}")
+    finally:
+        # Clean up the tar file
+        if os.path.exists(tar_temp_path):
+            os.remove(tar_temp_path)
+
+    return images
+
+
+@upload_bp.route('/flange-qc', methods=['GET', 'POST'])
+def flange_qc():
+    """Upload a flange board QC test result with O20 plots for each data input (J1, J3, J5)"""
+    if request.method == 'POST':
+        # Get form data
+        component_id = request.form.get('component_id', '').strip()
+        tested_by = request.form.get('tested_by', '').strip() or get_current_user()
+        feb_serial = request.form.get('feb_serial', '').strip()
+        notes = request.form.get('notes', '').strip()
+
+        # Pass/fail
+        pass_fail_value = request.form.get('pass_fail', '')
+        pass_fail = None
+        if pass_fail_value == 'pass':
+            pass_fail = True
+        elif pass_fail_value == 'fail':
+            pass_fail = False
+
+        # Validate component exists and is a flange_board
+        if not component_id:
+            flash('Component ID is required.', 'danger')
+            return redirect(url_for('upload.flange_qc'))
+
+        component = Component.get(component_id, g.db)
+        if not component:
+            flash(f"Component '{component_id}' not found.", 'danger')
+            return redirect(url_for('upload.flange_qc'))
+
+        if component.type != 'flange_board':
+            flash(f"Component '{component_id}' is not a flange board (type: {component.type}).", 'danger')
+            return redirect(url_for('upload.flange_qc'))
+
+        # Create temp directory for extraction
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            # Process tar files for each data input
+            all_files = []  # List of (path, metadata) tuples
+            file_counts = {'J1': 0, 'J3': 0, 'J5': 0}
+
+            for data_input in ['J1', 'J3', 'J5']:
+                tar_field = f'{data_input.lower()}_tar'
+                tar_file = request.files.get(tar_field)
+
+                if tar_file and tar_file.filename != '':
+                    try:
+                        extracted = extract_images_from_tar(tar_file, temp_dir, data_input)
+                        all_files.extend(extracted)
+                        file_counts[data_input] = len(extracted)
+                    except ValueError as e:
+                        flash(str(e), 'warning')
+
+            # Check if we have any files
+            if not all_files:
+                flash('No valid image files found in any of the tar files.', 'danger')
+                return redirect(url_for('upload.flange_qc'))
+
+            # Build measurements dict
+            measurements = {
+                'feb_serial': feb_serial,
+                'j1_file_count': file_counts['J1'],
+                'j3_file_count': file_counts['J3'],
+                'j5_file_count': file_counts['J5']
+            }
+
+            # Prepare files dict for TestResult
+            # We need to use a custom approach to attach metadata to each file
+            plot_paths = [f[0] for f in all_files]
+            file_metadata = {f[0]: f[1] for f in all_files}
+
+            # Create test result
+            test_result = TestResult(
+                component_id=component_id,
+                test_type='flange_qc_test',
+                pass_fail=pass_fail,
+                measurements=measurements,
+                files={'plot': plot_paths} if plot_paths else None,
+                tested_by=tested_by,
+                notes=notes or None
+            )
+
+            # Store the file metadata for later use
+            test_result._file_metadata = file_metadata
+
+            test_id = test_result.save(g.db)
+
+            # Now update the test_files records with metadata
+            # Match files by their data_input prefix in the original_filename
+            with g.db.get_connection() as conn:
+                # Get all files for this test
+                files = conn.execute("""
+                    SELECT id, original_filename FROM test_files WHERE test_id = ?
+                """, (test_id,)).fetchall()
+
+                for file_row in files:
+                    file_id = file_row['id']
+                    original_filename = file_row['original_filename']
+
+                    # Determine data_input from filename prefix (J1_, J3_, or J5_)
+                    data_input = None
+                    for di in ['J1', 'J3', 'J5']:
+                        if original_filename.startswith(f"{di}_"):
+                            data_input = di
+                            # Get the original name without the prefix
+                            orig_name = original_filename[len(f"{di}_"):]
+                            break
+
+                    if data_input:
+                        # Find the matching metadata from the temp file
+                        for temp_path, metadata in file_metadata.items():
+                            if os.path.basename(temp_path) == original_filename:
+                                conn.execute("""
+                                    UPDATE test_files
+                                    SET metadata_json = ?
+                                    WHERE id = ?
+                                """, (json.dumps(metadata), file_id))
+                                break
+                        else:
+                            # If no exact match found, create metadata from filename
+                            metadata = {
+                                'data_input': data_input,
+                                'original_name': orig_name
+                            }
+                            conn.execute("""
+                                UPDATE test_files
+                                SET metadata_json = ?
+                                WHERE id = ?
+                            """, (json.dumps(metadata), file_id))
+
+                conn.commit()
+
+            # Build success message
+            total_files = sum(file_counts.values())
+            msg = f'Flange QC test recorded (Test ID: {test_id}) with {total_files} plot(s): '
+            msg += f"J1={file_counts['J1']}, J3={file_counts['J3']}, J5={file_counts['J5']}"
+            flash(msg, 'success')
+
+            return redirect(url_for('tests.test_detail', test_id=test_id))
+
+        finally:
+            # Clean up temp directory
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+
+    # GET request - show the upload form
+    # Filter to only show flange_board components
+    components = Component.list_all(db=g.db)
+    flange_components = [c for c in components if c.type == 'flange_board']
+    component_ids = [c.id for c in flange_components]
+    prefill_component_id = request.args.get('component_id', '')
+
+    return render_template('upload/flange_qc.html',
                          component_ids=component_ids,
                          prefill_component_id=prefill_component_id)

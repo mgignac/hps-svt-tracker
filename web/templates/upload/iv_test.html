@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Upload IV Test - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">IV Test</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-graph-up"></i> Upload IV Test Result</h1>
+        <p class="text-muted">Record a current-voltage (IV) test measurement for a component</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <form method="post" enctype="multipart/form-data">
+            <!-- Component Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cpu"></i> Component</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Component ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a component ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Start typing to see matching component IDs</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Result -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Test Result</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Pass/Fail Status</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_pass" value="pass">
+                                <label class="form-check-label text-success" for="pass_fail_pass">
+                                    <i class="bi bi-check-circle"></i> Pass
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_fail" value="fail">
+                                <label class="form-check-label text-danger" for="pass_fail_fail">
+                                    <i class="bi bi-x-circle"></i> Fail
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_na" value="" checked>
+                                <label class="form-check-label text-muted" for="pass_fail_na">
+                                    N/A
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Measurements -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-speedometer2"></i> Measurements</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="bias_voltage" class="form-label">Bias Voltage (V)</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="bias_voltage" name="bias_voltage"
+                                       placeholder="e.g., 60">
+                                <span class="input-group-text">V</span>
+                            </div>
+                            <div class="form-text">Voltage at which leakage current was measured</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="leakage_current" class="form-label">Leakage Current (A)</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="leakage_current" name="leakage_current"
+                                       placeholder="e.g., 2.3e-9">
+                                <span class="input-group-text">A</span>
+                            </div>
+                            <div class="form-text">Use scientific notation for small values (e.g., 2.3e-9)</div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="breakdown_voltage" class="form-label">Breakdown Voltage (V)</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="breakdown_voltage" name="breakdown_voltage"
+                                       placeholder="e.g., 80">
+                                <span class="input-group-text">V</span>
+                            </div>
+                            <div class="form-text">Voltage at which breakdown occurs (if measured)</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="temperature" class="form-label">Temperature</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="temperature" name="temperature"
+                                       placeholder="e.g., 20">
+                                <span class="input-group-text">&deg;C</span>
+                            </div>
+                            <div class="form-text">Temperature during test</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Uploads -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-arrow-up"></i> Files</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Raw Data Files -->
+                    <div class="mb-4">
+                        <label for="raw_data" class="form-label">Raw Data Files</label>
+                        <input type="file" class="form-control" id="raw_data" name="raw_data"
+                               accept=".csv,.txt,.dat,.tsv,.hdf5,.h5,.root,.json" multiple>
+                        <div class="form-text">
+                            IV curve data (voltage/current pairs). Allowed: {{ allowed_data_extensions|join(', ') }}
+                        </div>
+                    </div>
+
+                    <!-- Plot Files -->
+                    <div class="mb-3">
+                        <label for="plots" class="form-label">Plot Files</label>
+                        <input type="file" class="form-control" id="plots" name="plots"
+                               accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif" multiple>
+                        <div class="form-text">
+                            IV curve plots or other visualizations. Allowed: {{ allowed_image_extensions|join(', ') }}
+                        </div>
+                    </div>
+
+                    <!-- Plot Preview -->
+                    <div id="plot-preview-container" style="display: none;">
+                        <label class="form-label">Plot Preview <span id="plot-count" class="badge bg-secondary"></span></label>
+                        <div class="border rounded p-2 bg-light">
+                            <div id="plot-previews" class="d-flex flex-wrap gap-2 justify-content-center"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Metadata -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Test Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tested_by" class="form-label">Tested By</label>
+                            <input type="text" class="form-control" id="tested_by" name="tested_by"
+                                   placeholder="Leave blank for current user">
+                            <div class="form-text">Defaults to your system username</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="test_setup" class="form-label">Test Setup</label>
+                            <input type="text" class="form-control" id="test_setup" name="test_setup"
+                                   placeholder="e.g., Probe Station 1">
+                            <div class="form-text">Equipment or test bench used</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="test_conditions" class="form-label">Test Conditions</label>
+                        <textarea class="form-control" id="test_conditions" name="test_conditions" rows="2"
+                                  placeholder="e.g., Dark box, humidity 40%, ..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                                  placeholder="Any additional observations or comments"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-upload"></i> Submit IV Test
+                </button>
+                <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary btn-lg">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-lightbulb"></i> IV Test Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6>What is an IV Test?</h6>
+                <p class="small">
+                    An IV (Current-Voltage) test measures the relationship between applied voltage
+                    and resulting current through a silicon sensor. This characterizes:
+                </p>
+                <ul class="small">
+                    <li><strong>Leakage current</strong> - Current at operating voltage</li>
+                    <li><strong>Breakdown voltage</strong> - Voltage where sensor fails</li>
+                    <li><strong>Depletion voltage</strong> - Full depletion point</li>
+                </ul>
+
+                <hr>
+
+                <h6>Expected Data Format</h6>
+                <p class="small">
+                    Raw data files should contain voltage/current pairs:
+                </p>
+                <pre class="small bg-light p-2 rounded"># Voltage (V), Current (A)
+0.0, 1.2e-12
+10.0, 5.4e-11
+20.0, 1.1e-10
+...</pre>
+
+                <hr>
+
+                <h6>Pass/Fail Criteria</h6>
+                <p class="small mb-0">
+                    Typical pass criteria:
+                </p>
+                <ul class="small">
+                    <li>Leakage current below threshold at operating voltage</li>
+                    <li>Breakdown voltage above safety margin</li>
+                    <li>No anomalous current spikes</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Plot preview functionality
+document.getElementById('plots').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const previewContainer = document.getElementById('plot-preview-container');
+    const previewsDiv = document.getElementById('plot-previews');
+    const fileCount = document.getElementById('plot-count');
+
+    previewsDiv.innerHTML = '';
+
+    if (files.length > 0) {
+        fileCount.textContent = files.length + ' file' + (files.length > 1 ? 's' : '');
+        previewContainer.style.display = 'block';
+
+        Array.from(files).forEach(function(file, index) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = 'Preview ' + (index + 1);
+                img.className = 'img-thumbnail';
+                img.style.maxHeight = '150px';
+                img.style.maxWidth = '200px';
+                previewsDiv.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+    } else {
+        previewContainer.style.display = 'none';
+    }
+});
+
+// Auto-format scientific notation for current input
+document.getElementById('leakage_current').addEventListener('blur', function(e) {
+    const value = e.target.value.trim();
+    if (value && !isNaN(parseFloat(value))) {
+        const num = parseFloat(value);
+        // If very small number, suggest scientific notation
+        if (Math.abs(num) < 0.001 && num !== 0) {
+            e.target.value = num.toExponential(2);
+        }
+    }
+});
+</script>
+{% endblock %}

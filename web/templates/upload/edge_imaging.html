@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Edge Imaging Test - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Edge Imaging</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-rulers"></i> Upload Edge Imaging Test</h1>
+        <p class="text-muted">Record edge imaging analysis measurements for a sensor component</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <form method="post" enctype="multipart/form-data">
+            <!-- Component Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cpu"></i> Component</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Component ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a sensor ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Start typing to see matching component IDs</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Result -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Test Result</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Pass/Fail Status</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_pass" value="pass">
+                                <label class="form-check-label text-success" for="pass_fail_pass">
+                                    <i class="bi bi-check-circle"></i> Pass
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_fail" value="fail">
+                                <label class="form-check-label text-danger" for="pass_fail_fail">
+                                    <i class="bi bi-x-circle"></i> Fail
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_na" value="" checked>
+                                <label class="form-check-label text-muted" for="pass_fail_na">
+                                    N/A
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Upload with OCR -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-image"></i> Edge Imaging Files</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label for="edge_images" class="form-label">Edge Imaging Screenshots</label>
+                        <input type="file" class="form-control" id="edge_images" name="edge_images"
+                               accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif" multiple>
+                        <div class="form-text">
+                            Upload microscope screenshots with measurement dialogs. Allowed: {{ allowed_image_extensions|join(', ') }}
+                        </div>
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div id="image-preview-container" style="display: none;">
+                        <label class="form-label">Image Preview <span id="image-count" class="badge bg-secondary"></span></label>
+                        <div class="border rounded p-2 bg-light">
+                            <div id="image-previews" class="d-flex flex-wrap gap-2 justify-content-center"></div>
+                        </div>
+                    </div>
+
+                    <!-- OCR Option -->
+                    {% if ocr_available %}
+                    <div class="mt-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="extract_measurements" name="extract_measurements" checked>
+                            <label class="form-check-label" for="extract_measurements">
+                                <i class="bi bi-magic"></i> Automatically extract measurements from images (OCR)
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            If enabled, the system will attempt to read measurement values from "Measure Result" dialogs in your images.
+                            Extracted values will override any manual measurements entered below.
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="mt-3">
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>OCR not available.</strong> To enable automatic measurement extraction, install the OCR dependencies:
+                            <code>pip install Pillow pytesseract</code> and ensure Tesseract OCR is installed on your system.
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Manual Measurements -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-rulers"></i> Measurements</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Enter measurements manually, or leave blank if using automatic extraction from images.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="edge_gap_mean" class="form-label">Edge Gap Mean</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="edge_gap_mean" name="edge_gap_mean"
+                                       placeholder="e.g., 220.5">
+                                <span class="input-group-text">um</span>
+                            </div>
+                            <div class="form-text">Average edge gap measurement</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edge_gap_min" class="form-label">Edge Gap Min</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="edge_gap_min" name="edge_gap_min"
+                                       placeholder="e.g., 217.1">
+                                <span class="input-group-text">um</span>
+                            </div>
+                            <div class="form-text">Minimum edge gap measured</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edge_gap_max" class="form-label">Edge Gap Max</label>
+                            <div class="input-group">
+                                <input type="number" step="any" class="form-control" id="edge_gap_max" name="edge_gap_max"
+                                       placeholder="e.g., 230.6">
+                                <span class="input-group-text">um</span>
+                            </div>
+                            <div class="form-text">Maximum edge gap measured</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Metadata -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Test Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tested_by" class="form-label">Tested By</label>
+                            <input type="text" class="form-control" id="tested_by" name="tested_by"
+                                   placeholder="Leave blank for current user">
+                            <div class="form-text">Defaults to your system username</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="test_setup" class="form-label">Test Setup</label>
+                            <input type="text" class="form-control" id="test_setup" name="test_setup"
+                                   placeholder="e.g., Optical Microscope 1">
+                            <div class="form-text">Equipment used for imaging</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="test_conditions" class="form-label">Test Conditions</label>
+                        <textarea class="form-control" id="test_conditions" name="test_conditions" rows="2"
+                                  placeholder="e.g., 10x magnification, diffuse lighting"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                                  placeholder="Any additional observations about the edge quality"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-upload"></i> Submit Edge Imaging Test
+                </button>
+                <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary btn-lg">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Edge Imaging Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6>What is Edge Imaging?</h6>
+                <p class="small">
+                    Edge imaging analysis measures the gap between the sensor's active area
+                    and its physical edge. This characterizes:
+                </p>
+                <ul class="small">
+                    <li><strong>Edge quality</strong> - Uniformity of the dicing cut</li>
+                    <li><strong>Guard ring clearance</strong> - Distance from active strips</li>
+                    <li><strong>Damage assessment</strong> - Chips or defects at edge</li>
+                </ul>
+
+                <hr>
+
+                <h6>Automatic Measurement Extraction</h6>
+                <p class="small">
+                    {% if ocr_available %}
+                    <span class="badge bg-success">OCR Available</span><br>
+                    The system can automatically read measurements from microscope screenshots
+                    that contain a "Measure Result" dialog box.
+                    {% else %}
+                    <span class="badge bg-warning text-dark">OCR Not Available</span><br>
+                    Install dependencies to enable automatic extraction:
+                    <code class="small">pip install Pillow pytesseract</code>
+                    {% endif %}
+                </p>
+
+                <hr>
+
+                <h6>Expected Image Format</h6>
+                <p class="small">
+                    Upload microscope screenshots that include the measurement dialog.
+                    The OCR system looks for text like:
+                </p>
+                <pre class="small bg-light p-2 rounded">Measure Result
+No.  Measure    Result
+1    2 Points   218.13 um
+2    2 Points   217.14 um
+3    2 Points   230.58 um</pre>
+
+                <hr>
+
+                <h6>Pass/Fail Criteria</h6>
+                <p class="small mb-0">
+                    Typical pass criteria:
+                </p>
+                <ul class="small">
+                    <li>Edge gap within specification range</li>
+                    <li>Consistent measurements (low variance)</li>
+                    <li>No visible chips or damage</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Image preview functionality
+document.getElementById('edge_images').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const previewContainer = document.getElementById('image-preview-container');
+    const previewsDiv = document.getElementById('image-previews');
+    const fileCount = document.getElementById('image-count');
+
+    previewsDiv.innerHTML = '';
+
+    if (files.length > 0) {
+        fileCount.textContent = files.length + ' file' + (files.length > 1 ? 's' : '');
+        previewContainer.style.display = 'block';
+
+        Array.from(files).forEach(function(file, index) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = 'Preview ' + (index + 1);
+                img.className = 'img-thumbnail';
+                img.style.maxHeight = '150px';
+                img.style.maxWidth = '200px';
+                img.style.cursor = 'pointer';
+                img.title = 'Click to enlarge';
+                img.onclick = function() {
+                    // Simple lightbox effect
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+                    const largeImg = document.createElement('img');
+                    largeImg.src = e.target.result;
+                    largeImg.style.maxWidth = '90%';
+                    largeImg.style.maxHeight = '90%';
+                    overlay.appendChild(largeImg);
+                    overlay.onclick = function() { document.body.removeChild(overlay); };
+                    document.body.appendChild(overlay);
+                };
+                previewsDiv.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+    } else {
+        previewContainer.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

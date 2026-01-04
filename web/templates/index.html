@@ -12,6 +12,60 @@
     </div>
 </div>
 
+<!-- Photo Carousel -->
+{% if recent_photos %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-images"></i> Component Photos</h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="photoCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="4000">
+                    <div class="carousel-inner">
+                        {% for photo in recent_photos %}
+                        <div class="carousel-item {% if loop.first %}active{% endif %}">
+                            <div class="d-flex justify-content-center align-items-center bg-dark" style="height: 300px;">
+                                <a href="{{ url_for('components.component_detail', component_id=photo.component_id) }}">
+                                    <img src="{{ photo.image_url }}" class="d-block" alt="{{ photo.description or photo.component_id }}"
+                                         style="max-height: 280px; max-width: 100%; object-fit: contain;">
+                                </a>
+                            </div>
+                            <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded px-2 py-1" style="bottom: 10px;">
+                                <p class="mb-0 small">
+                                    <a href="{{ url_for('components.component_detail', component_id=photo.component_id) }}" class="text-white text-decoration-none">
+                                        {{ photo.component_id }}
+                                    </a>
+                                    {% if photo.description %} - {{ photo.description }}{% endif %}
+                                </p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if recent_photos|length > 1 %}
+                    <button class="carousel-control-prev" type="button" data-bs-target="#photoCarousel" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#photoCarousel" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                    <div class="carousel-indicators">
+                        {% for photo in recent_photos %}
+                        <button type="button" data-bs-target="#photoCarousel" data-bs-slide-to="{{ loop.index0 }}"
+                                {% if loop.first %}class="active" aria-current="true"{% endif %}
+                                aria-label="Slide {{ loop.index }}"></button>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
@@ -151,7 +205,7 @@
                             <tr>
                                 <td>
                                     <a href="{{ url_for('components.list_components', type=row.type) }}">
-                                        {{ row.type }}
+                                        {{ row.type|display_type }}
                                     </a>
                                 </td>
                                 <td class="text-end">
@@ -169,4 +223,52 @@
         </div>
     </div>
 </div>
+
+<!-- Recent Photos List -->
+{% if recent_photos %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Photos</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 80px;">Preview</th>
+                                <th>Component</th>
+                                <th>Description</th>
+                                <th>Uploaded By</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for photo in recent_photos %}
+                            <tr>
+                                <td>
+                                    <a href="{{ photo.image_url }}" target="_blank">
+                                        <img src="{{ photo.image_url }}" alt="Thumbnail"
+                                             class="img-thumbnail" style="max-height: 50px; max-width: 70px;">
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('components.component_detail', component_id=photo.component_id) }}">
+                                        {{ photo.component_id }}
+                                    </a>
+                                </td>
+                                <td>{{ photo.description or '-' }}</td>
+                                <td>{{ photo.uploaded_by or '-' }}</td>
+                                <td>{{ photo.upload_date[:10] if photo.upload_date else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
