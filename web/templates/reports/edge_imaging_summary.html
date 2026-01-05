@@ -42,8 +42,62 @@
     </div>
 </div>
 
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Edge Gap by Position (L/C/R)</h5>
+            </div>
+            <div class="card-body text-center">
+                <img src="{{ url_for('reports.edge_imaging_lcr_image') }}"
+                     alt="Edge Imaging L/C/R Plot"
+                     class="img-fluid"
+                     style="max-width: 100%;">
+                <p class="text-muted small mt-2 mb-0">
+                    L = Left (0 mm), C = Center (16.75 mm), R = Right (33.5 mm)
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Edge Slope</h5>
+            </div>
+            <div class="card-body text-center">
+                <img src="{{ url_for('reports.edge_slope_image') }}"
+                     alt="Edge Slope Plot"
+                     class="img-fluid"
+                     style="max-width: 100%;">
+                <p class="text-muted small mt-2 mb-0">
+                    Slope of linear fit to L/C/R measurements. Color indicates fit quality (R²).
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Correlation Section -->
+<h2 class="h4 mt-4 mb-3">Edge Imaging vs CNM Attribute Correlations</h2>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Edge Distance Correlations</h5>
+    </div>
+    <div class="card-body text-center">
+        <img src="{{ url_for('reports.edge_correlation_image') }}"
+             alt="Edge Correlation Plot"
+             class="img-fluid"
+             style="max-width: 100%;">
+        <p class="text-muted small mt-2 mb-0">
+            Correlation between edge imaging L/C/R measurements and CNM edge attributes.
+            Left (L) vs Edge A, Center (C) vs Centre, Right (R) vs Edge B.
+        </p>
+    </div>
+</div>
+
 <!-- Sensor Attributes Section -->
-<h2 class="h4 mt-4 mb-3">Sensor Attributes</h2>
+<h2 class="h4 mt-4 mb-3">Sensor Attributes (CNM)</h2>
 
 <div class="card mb-4">
     <div class="card-header">
