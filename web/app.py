@@ -52,12 +52,14 @@ def create_app(config_class=DevelopmentConfig):
     from .routes.tests import tests_bp
     from .routes.files import files_bp
     from .routes.upload import upload_bp
+    from .routes.reports import reports_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(components_bp, url_prefix='/components')
     app.register_blueprint(tests_bp, url_prefix='/tests')
     app.register_blueprint(files_bp, url_prefix='/files')
     app.register_blueprint(upload_bp, url_prefix='/upload')
+    app.register_blueprint(reports_bp, url_prefix='/reports')
 
     # Error handlers
     @app.errorhandler(404)

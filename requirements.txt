@@ -6,3 +6,6 @@ python-dateutil>=2.8
 # Web interface dependencies
 flask>=3.0
 gunicorn>=21.0  # Production WSGI server
+
+# Plotting and visualization
+matplotlib>=3.5

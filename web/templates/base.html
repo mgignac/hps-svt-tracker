@@ -55,6 +55,12 @@
                             <i class="bi bi-cpu"></i> Components
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and request.endpoint.startswith('reports.') %}active{% endif %}"
+                           href="{{ url_for('reports.edge_imaging_summary') }}">
+                            <i class="bi bi-graph-up"></i> Reports
+                        </a>
+                    </li>
                     <li class="nav-item edit-mode-only">
                         <a class="nav-link {% if request.endpoint and request.endpoint.startswith('upload.') %}active{% endif %}"
                            href="{{ url_for('upload.index') }}">
