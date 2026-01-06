@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Install Component - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Installation</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-box-arrow-in-down"></i> Install Component</h1>
+        <p class="text-muted">Record installation of a component at a detector position</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Installation Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <!-- Component ID -->
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Component ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a component ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Components already installed are not shown. Start typing to see available components.</div>
+                    </div>
+
+                    <!-- Position Selection -->
+                    <div class="mb-3">
+                        <label for="position" class="form-label">Position <span class="text-danger">*</span></label>
+                        <select class="form-select" id="position" name="position">
+                            <option value="">-- Select a position --</option>
+
+                            <optgroup label="Layer Positions (0-3)">
+                                {% for pos in layer_positions[:16] %}
+                                <option value="{{ pos }}">{{ pos }}</option>
+                                {% endfor %}
+                            </optgroup>
+
+                            <optgroup label="Layer Positions (4-7)">
+                                {% for pos in layer_positions[16:] %}
+                                <option value="{{ pos }}">{{ pos }}</option>
+                                {% endfor %}
+                            </optgroup>
+
+                            <optgroup label="FEB Positions">
+                                {% for pos in feb_positions %}
+                                <option value="{{ pos }}">{{ pos }}</option>
+                                {% endfor %}
+                            </optgroup>
+
+                            <optgroup label="Flange Positions">
+                                {% for pos in flange_positions %}
+                                <option value="{{ pos }}">{{ pos }}</option>
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                        <div class="form-text">Select a standard position or enter a custom position below</div>
+                    </div>
+
+                    <!-- Custom Position -->
+                    <div class="mb-3">
+                        <label for="custom_position" class="form-label">Custom Position</label>
+                        <input type="text" class="form-control" id="custom_position" name="custom_position"
+                               placeholder="Enter custom position (overrides selection above)">
+                        <div class="form-text">Use this for non-standard positions. If filled, this overrides the dropdown selection.</div>
+                    </div>
+
+                    <!-- Run Period -->
+                    <div class="mb-3">
+                        <label for="run_period" class="form-label">Run Period <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="run_period" name="run_period" required
+                               placeholder="e.g., 2025_spring_run"
+                               list="run_period_list">
+                        <datalist id="run_period_list">
+                            <option value="2025_spring_run">
+                            <option value="2025_fall_run">
+                            <option value="2026_spring_run">
+                            <option value="2026_fall_run">
+                        </datalist>
+                        <div class="form-text">Enter the run period for this installation</div>
+                    </div>
+
+                    <!-- Installed By -->
+                    <div class="mb-3">
+                        <label for="installed_by" class="form-label">Installed By</label>
+                        <input type="text" class="form-control" id="installed_by" name="installed_by"
+                               placeholder="Leave blank to use current system user">
+                        <div class="form-text">Optional - defaults to your system username</div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                                  placeholder="Optional installation notes..."></textarea>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-in-down"></i> Install Component
+                        </button>
+                        <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Position Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6>Layer Positions (0-3)</h6>
+                <p class="small text-muted mb-2">
+                    Format: <code>LayerN_{top/bottom}_{axial/stereo}</code><br>
+                    Example: <code>Layer1_top_axial</code>
+                </p>
+
+                <h6>Layer Positions (4-7)</h6>
+                <p class="small text-muted mb-2">
+                    Format: <code>LayerN_{top/bottom}_{axial/stereo}_{slot/hole}</code><br>
+                    Example: <code>Layer5_top_axial_slot</code>
+                </p>
+
+                <h6>FEB Positions</h6>
+                <p class="small text-muted mb-2">
+                    Format: <code>FEBN</code><br>
+                    Example: <code>FEB1</code>, <code>FEB2</code>
+                </p>
+
+                <h6>Flange Positions</h6>
+                <p class="small text-muted mb-3">
+                    Format: <code>Flange_slotN</code> (slots 0-3)<br>
+                    Example: <code>Flange_slot0</code>
+                </p>
+
+                <hr>
+
+                <h6>Notes</h6>
+                <ul class="small mb-0">
+                    <li>Only components not already installed are shown</li>
+                    <li>Installation updates the component status to "installed"</li>
+                    <li>Use "Remove" to uninstall before reinstalling elsewhere</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Clear dropdown when custom position is entered
+document.getElementById('custom_position').addEventListener('input', function(e) {
+    if (e.target.value.trim() !== '') {
+        document.getElementById('position').value = '';
+    }
+});
+
+// Clear custom position when dropdown is selected
+document.getElementById('position').addEventListener('change', function(e) {
+    if (e.target.value !== '') {
+        document.getElementById('custom_position').value = '';
+    }
+});
+</script>
+{% endblock %}

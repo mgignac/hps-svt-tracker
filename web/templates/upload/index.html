@@ -173,6 +173,40 @@
         </div>
     </div>
 
+    <!-- Installation Card -->
+    <div class="col-md-4 mb-4">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-box-arrow-in-down text-success" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Install Component</h5>
+                <p class="card-text text-muted">
+                    Record installation of a component at a detector position
+                    for a specific run period.
+                </p>
+                <a href="{{ url_for('upload.installation') }}" class="btn btn-success">
+                    <i class="bi bi-box-arrow-in-down"></i> Install
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-box-arrow-in-down text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Install Component</h5>
+                <p class="card-text text-muted">
+                    Record installation of a component at a detector position
+                    for a specific run period.
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-box-arrow-in-down"></i> Install
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
     <div class="col-md-4 mb-4">
         <div class="card h-100 bg-light">
             <div class="card-body text-center">

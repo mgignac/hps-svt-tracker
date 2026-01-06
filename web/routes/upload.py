@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, render_template, request, g, redirect, url_for, flash
 from werkzeug.utils import secure_filename
-from hps_svt_tracker.models import Component, TestResult, add_maintenance_log
+from hps_svt_tracker.models import Component, TestResult, add_maintenance_log, install_component
 
 
 upload_bp = Blueprint('upload', __name__)
@@ -785,3 +785,101 @@ def maintenance():
                          component_ids=component_ids,
                          prefill_component_id=prefill_component_id,
                          allowed_image_extensions=ALLOWED_IMAGE_EXTENSIONS)
+
+
+# Standard position options for the detector
+LAYER_POSITIONS = []
+# Layers 0-3: LayerN_{top/bottom}_{axial/stereo}
+for layer in range(4):
+    for tb in ['top', 'bottom']:
+        for orientation in ['axial', 'stereo']:
+            LAYER_POSITIONS.append(f"Layer{layer}_{tb}_{orientation}")
+
+# Layers 4-7: LayerN_{top/bottom}_{axial/stereo}_{slot/hole}
+for layer in range(4, 8):
+    for tb in ['top', 'bottom']:
+        for orientation in ['axial', 'stereo']:
+            for position in ['slot', 'hole']:
+                LAYER_POSITIONS.append(f"Layer{layer}_{tb}_{orientation}_{position}")
+
+# FEB positions
+FEB_POSITIONS = [f"FEB{i}" for i in range(1, 13)]
+
+# Flange positions
+FLANGE_POSITIONS = [f"Flange_slot{i}" for i in range(4)]
+
+
+@upload_bp.route('/installation', methods=['GET', 'POST'])
+def installation():
+    """Record installation of a component"""
+    if request.method == 'POST':
+        # Get form data
+        component_id = request.form.get('component_id', '').strip()
+        position = request.form.get('position', '').strip()
+        custom_position = request.form.get('custom_position', '').strip()
+        run_period = request.form.get('run_period', '').strip()
+        installed_by = request.form.get('installed_by', '').strip() or get_current_user()
+        notes = request.form.get('notes', '').strip()
+
+        # Use custom position if provided
+        if custom_position:
+            position = custom_position
+
+        # Validate required fields
+        if not component_id:
+            flash('Component ID is required.', 'danger')
+            return redirect(url_for('upload.installation'))
+
+        if not position:
+            flash('Position is required.', 'danger')
+            return redirect(url_for('upload.installation'))
+
+        if not run_period:
+            flash('Run period is required.', 'danger')
+            return redirect(url_for('upload.installation'))
+
+        # Validate component exists
+        component = Component.get(component_id, g.db)
+        if not component:
+            flash(f"Component '{component_id}' not found.", 'danger')
+            return redirect(url_for('upload.installation'))
+
+        # Check if component is already installed
+        if component.installation_status == 'installed':
+            flash(f"Component '{component_id}' is already installed at {component.installed_position}. "
+                  "Remove it first before installing at a new position.", 'warning')
+            return redirect(url_for('upload.installation'))
+
+        try:
+            install_component(
+                component_id=component_id,
+                position=position,
+                run_period=run_period,
+                installed_by=installed_by,
+                notes=notes or None,
+                db=g.db
+            )
+
+            flash(f"Component '{component_id}' installed at {position} for {run_period}.", 'success')
+            return redirect(url_for('components.component_detail', component_id=component_id))
+
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('upload.installation'))
+
+    # GET request - show the form
+    components = Component.list_all(db=g.db)
+    # Filter to components that are not already installed
+    available_components = [c for c in components if c.installation_status != 'installed']
+    component_ids = [c.id for c in available_components]
+    all_component_ids = [c.id for c in components]
+
+    prefill_component_id = request.args.get('component_id', '')
+
+    return render_template('upload/installation.html',
+                         component_ids=component_ids,
+                         all_component_ids=all_component_ids,
+                         prefill_component_id=prefill_component_id,
+                         layer_positions=LAYER_POSITIONS,
+                         feb_positions=FEB_POSITIONS,
+                         flange_positions=FLANGE_POSITIONS)
