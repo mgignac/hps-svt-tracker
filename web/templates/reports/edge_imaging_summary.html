@@ -140,7 +140,7 @@
                         <th>Edge Gap Mean (um)</th>
                         <th>Min (um)</th>
                         <th>Max (um)</th>
-                        <th>Test Date</th>
+                        <th style="min-width: 220px;">Test Date</th>
                         <th>Result</th>
                     </tr>
                 </thead>
@@ -155,7 +155,7 @@
                         <td>{{ "%.2f"|format(sensor.mean) }}</td>
                         <td>{{ "%.2f"|format(sensor.min) }}</td>
                         <td>{{ "%.2f"|format(sensor.max) }}</td>
-                        <td>{{ sensor.test_date[:19] }}</td>
+                        <td>{{ sensor.test_date|format_date }}</td>
                         <td>
                             {% if sensor.pass_fail is none %}
                                 <span class="badge bg-secondary">N/A</span>

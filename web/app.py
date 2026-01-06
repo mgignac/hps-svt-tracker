@@ -1,9 +1,17 @@
 """
 Flask application factory for HPS SVT Tracker web interface
 """
+from datetime import datetime
 from flask import Flask, g, render_template
 from hps_svt_tracker.database import Database, get_default_db
 from .config import DevelopmentConfig
+
+
+def _ordinal_suffix(day):
+    """Return the ordinal suffix for a day number (st, nd, rd, th)."""
+    if 11 <= day <= 13:
+        return 'th'
+    return {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
 
 # Display name mappings for component types
 COMPONENT_TYPE_DISPLAY_NAMES = {
@@ -86,5 +94,40 @@ def create_app(config_class=DevelopmentConfig):
     def display_type_filter(type_name):
         """Convert internal component type name to human-readable display name"""
         return COMPONENT_TYPE_DISPLAY_NAMES.get(type_name, type_name)
+
+    @app.template_filter('format_date')
+    def format_date_filter(date_str, include_time=True):
+        """
+        Convert ISO date string to human-readable format.
+
+        Args:
+            date_str: ISO format date string (e.g., "2025-01-15T14:26:35")
+            include_time: If True, include time portion (default True)
+
+        Returns:
+            Formatted string like "January 15th, 2025 14:26:35" or "January 15th, 2025"
+        """
+        if not date_str:
+            return 'N/A'
+
+        try:
+            # Handle both "T" separator and space separator
+            date_str = str(date_str).replace('T', ' ')
+            # Parse the date string (handle with or without microseconds)
+            if '.' in date_str:
+                dt = datetime.strptime(date_str[:26], '%Y-%m-%d %H:%M:%S.%f')
+            else:
+                dt = datetime.strptime(date_str[:19], '%Y-%m-%d %H:%M:%S')
+
+            day = dt.day
+            suffix = _ordinal_suffix(day)
+
+            if include_time:
+                return dt.strftime(f'%B {day}{suffix}, %Y %H:%M:%S')
+            else:
+                return dt.strftime(f'%B {day}{suffix}, %Y')
+        except (ValueError, TypeError):
+            # Return original if parsing fails
+            return date_str
 
     return app

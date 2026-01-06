@@ -37,6 +37,9 @@
                     <dt class="col-sm-4">Asset Tag:</dt>
                     <dd class="col-sm-8">{{ component.asset_tag or 'N/A' }}</dd>
 
+                    <dt class="col-sm-4">Registered:</dt>
+                    <dd class="col-sm-8">{{ component.created_at|format_date }}</dd>
+
                     <dt class="col-sm-4">Status:</dt>
                     <dd class="col-sm-8">
                         <span class="badge status-{{ component.installation_status }} view-mode-only">
@@ -179,7 +182,7 @@
                         <p class="card-text small mb-1">{{ img.description }}</p>
                         {% endif %}
                         <p class="card-text small text-muted mb-0">
-                            {{ img.upload_date[:10] }}
+                            {{ img.upload_date|format_date(include_time=false) }}
                             {% if img.uploaded_by %} by {{ img.uploaded_by }}{% endif %}
                         </p>
                     </div>
@@ -207,7 +210,7 @@
             <table class="table table-sm table-hover mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Date</th>
+                        <th style="min-width: 220px;">Date</th>
                         <th>Test Type</th>
                         <th>Result</th>
                         <th>Tested By</th>
@@ -217,7 +220,7 @@
                 <tbody>
                     {% for test in tests %}
                     <tr>
-                        <td>{{ test.test_date[:19] }}</td>
+                        <td>{{ test.test_date|format_date }}</td>
                         <td>{{ test.test_type }}</td>
                         <td>
                             {% if test.pass_fail %}
@@ -261,8 +264,8 @@
                 <thead class="table-light">
                     <tr>
                         <th>Position</th>
-                        <th>Installed</th>
-                        <th>Removed</th>
+                        <th style="min-width: 220px;">Installed</th>
+                        <th style="min-width: 220px;">Removed</th>
                         <th>Run Period</th>
                         <th>Installed By</th>
                         <th>Notes</th>
@@ -272,10 +275,10 @@
                     {% for inst in installations %}
                     <tr>
                         <td>{{ inst.position }}</td>
-                        <td>{{ inst.installation_date[:19] }}</td>
+                        <td>{{ inst.installation_date|format_date }}</td>
                         <td>
                             {% if inst.removal_date %}
-                                {{ inst.removal_date[:19] }}
+                                {{ inst.removal_date|format_date }}
                             {% else %}
                                 <span class="badge bg-success">Current</span>
                             {% endif %}
@@ -311,7 +314,7 @@
             <table class="table table-sm table-hover mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Date</th>
+                        <th style="min-width: 220px;">Date</th>
                         <th>Type</th>
                         <th>Severity</th>
                         <th>Description</th>
@@ -322,7 +325,7 @@
                 <tbody>
                     {% for log in logs %}
                     <tr>
-                        <td>{{ log.log_date[:19] }}</td>
+                        <td>{{ log.log_date|format_date }}</td>
                         <td><span class="badge bg-secondary">{{ log.log_type }}</span></td>
                         <td>
                             {% if log.severity == 'critical' %}
@@ -384,7 +387,7 @@
                         <th>Connected To</th>
                         <th>Connection Type</th>
                         <th>Cable ID</th>
-                        <th>Date</th>
+                        <th style="min-width: 180px;">Date</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -411,7 +414,7 @@
                                 -
                             {% endif %}
                         </td>
-                        <td>{{ conn.installation_date[:10] if conn.installation_date else '-' }}</td>
+                        <td>{{ conn.installation_date|format_date(include_time=false) if conn.installation_date else '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

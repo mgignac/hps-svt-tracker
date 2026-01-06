@@ -149,7 +149,7 @@
                             <tr>
                                 <th>Component</th>
                                 <th>Test Type</th>
-                                <th>Date</th>
+                                <th style="min-width: 180px;">Date</th>
                                 <th>Result</th>
                             </tr>
                         </thead>
@@ -162,7 +162,7 @@
                                     </a>
                                 </td>
                                 <td>{{ test.test_type }}</td>
-                                <td>{{ test.test_date[:10] }}</td>
+                                <td>{{ test.test_date|format_date(include_time=false) }}</td>
                                 <td>
                                     {% if test.pass_fail %}
                                         <span class="badge bg-success">PASS</span>
@@ -241,7 +241,7 @@
                                 <th>Component</th>
                                 <th>Description</th>
                                 <th>Uploaded By</th>
-                                <th>Date</th>
+                                <th style="min-width: 180px;">Date</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -260,7 +260,7 @@
                                 </td>
                                 <td>{{ photo.description or '-' }}</td>
                                 <td>{{ photo.uploaded_by or '-' }}</td>
-                                <td>{{ photo.upload_date[:10] if photo.upload_date else '-' }}</td>
+                                <td>{{ photo.upload_date|format_date(include_time=false) if photo.upload_date else '-' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

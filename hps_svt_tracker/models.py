@@ -61,6 +61,7 @@ class Component:
         self.assembled_sensor_id = kwargs.get('assembled_sensor_id')
         self.assembled_hybrid_id = kwargs.get('assembled_hybrid_id')
         self.attributes = attributes or {}
+        self.created_at = kwargs.get('created_at')
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert component to dictionary for database storage"""
@@ -97,7 +98,8 @@ class Component:
             assembled_sensor_id=row.get('assembled_sensor_id'),
             assembled_hybrid_id=row.get('assembled_hybrid_id'),
             attributes=attributes,
-            notes=row['notes']
+            notes=row['notes'],
+            created_at=row.get('created_at')
         )
     
     def save(self, db: Optional[Database] = None):
