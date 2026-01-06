@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Add Comment - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Comment</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-chat-left-text"></i> Add Comment / Log Entry</h1>
+        <p class="text-muted">Add a comment, note, or maintenance log entry for a component</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Maintenance Log Entry</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    <!-- Component ID -->
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Component ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a component ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Start typing to see matching component IDs</div>
+                    </div>
+
+                    <!-- Log Type -->
+                    <div class="mb-3">
+                        <label for="log_type" class="form-label">Type <span class="text-danger">*</span></label>
+                        <select class="form-select" id="log_type" name="log_type" required>
+                            <option value="note" selected>Note</option>
+                            <option value="issue">Issue</option>
+                            <option value="repair">Repair</option>
+                            <option value="maintenance">Maintenance</option>
+                        </select>
+                        <div class="form-text">Select the type of log entry</div>
+                    </div>
+
+                    <!-- Severity -->
+                    <div class="mb-3">
+                        <label for="severity" class="form-label">Severity <span class="text-danger">*</span></label>
+                        <div class="btn-group w-100" role="group" aria-label="Severity selection">
+                            <input type="radio" class="btn-check" name="severity" id="severity_info" value="info" checked>
+                            <label class="btn btn-outline-primary" for="severity_info">
+                                <i class="bi bi-info-circle"></i> Info
+                            </label>
+
+                            <input type="radio" class="btn-check" name="severity" id="severity_warning" value="warning">
+                            <label class="btn btn-outline-warning" for="severity_warning">
+                                <i class="bi bi-exclamation-triangle"></i> Warning
+                            </label>
+
+                            <input type="radio" class="btn-check" name="severity" id="severity_critical" value="critical">
+                            <label class="btn btn-outline-danger" for="severity_critical">
+                                <i class="bi bi-exclamation-octagon"></i> Critical
+                            </label>
+                        </div>
+                        <div class="form-text">Select severity level for this entry</div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Comment / Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="description" name="description" rows="4" required
+                                  placeholder="Enter your comment, observation, or description of the issue/maintenance..."></textarea>
+                        <div class="form-text">Provide details about the observation, issue, repair, or maintenance performed</div>
+                    </div>
+
+                    <!-- Optional Image -->
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Photo (Optional)</label>
+                        <input type="file" class="form-control" id="image" name="image"
+                               accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif">
+                        <div class="form-text">Attach an optional photo to document the issue or condition</div>
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div class="mb-3" id="preview-container" style="display: none;">
+                        <label class="form-label">Preview</label>
+                        <div class="border rounded p-2 bg-light text-center">
+                            <img id="image-preview" class="img-thumbnail" style="max-height: 200px; max-width: 300px;">
+                        </div>
+                    </div>
+
+                    <!-- Logged By -->
+                    <div class="mb-3">
+                        <label for="logged_by" class="form-label">Logged By</label>
+                        <input type="text" class="form-control" id="logged_by" name="logged_by"
+                               placeholder="Leave blank to use current system user">
+                        <div class="form-text">Optional - defaults to your system username</div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Add Comment
+                        </button>
+                        <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Tips</h5>
+            </div>
+            <div class="card-body">
+                <h6>Log Types</h6>
+                <ul class="mb-3">
+                    <li><strong>Note:</strong> General observation or comment</li>
+                    <li><strong>Issue:</strong> Problem or concern to track</li>
+                    <li><strong>Repair:</strong> Repair work performed</li>
+                    <li><strong>Maintenance:</strong> Routine maintenance activity</li>
+                </ul>
+
+                <h6>Severity Levels</h6>
+                <ul class="mb-3">
+                    <li><span class="badge bg-primary">Info</span> General information</li>
+                    <li><span class="badge bg-warning text-dark">Warning</span> Requires attention</li>
+                    <li><span class="badge bg-danger">Critical</span> Urgent action needed</li>
+                </ul>
+
+                <h6>Best Practices</h6>
+                <ul class="mb-0">
+                    <li class="mb-2">Be specific about what you observed or did</li>
+                    <li class="mb-2">Include relevant measurements or conditions</li>
+                    <li class="mb-2">Attach photos to document visual issues</li>
+                    <li class="mb-2">Log entries appear on the component detail page</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Image preview functionality
+document.getElementById('image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const previewContainer = document.getElementById('preview-container');
+    const previewImg = document.getElementById('image-preview');
+
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            previewContainer.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        previewContainer.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

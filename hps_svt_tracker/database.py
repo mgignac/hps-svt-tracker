@@ -173,12 +173,19 @@ class Database:
                     resolution TEXT,
                     resolved_date DATE,
                     logged_by TEXT,
+                    image_path TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (component_id) REFERENCES components(id),
                     CHECK (log_type IN ('issue', 'repair', 'maintenance', 'note')),
                     CHECK (severity IN ('critical', 'warning', 'info'))
                 )
             """)
+
+            # Add image_path column if it doesn't exist (for existing databases)
+            try:
+                conn.execute("ALTER TABLE maintenance_log ADD COLUMN image_path TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # Component images table
             conn.execute("""

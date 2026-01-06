@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, render_template, request, g, redirect, url_for, flash
 from werkzeug.utils import secure_filename
-from hps_svt_tracker.models import Component, TestResult
+from hps_svt_tracker.models import Component, TestResult, add_maintenance_log
 
 
 upload_bp = Blueprint('upload', __name__)
@@ -381,6 +381,7 @@ def edge_imaging():
         files = {}
         temp_files = []  # Track temp files for cleanup
         image_temp_paths = []  # For OCR extraction
+        original_filenames = {}  # Map temp paths to original filenames
 
         try:
             # Edge imaging files (images with embedded measurements)
@@ -397,6 +398,8 @@ def edge_imaging():
                             image_paths.append(temp_path)
                             temp_files.append(temp_path)
                             image_temp_paths.append(temp_path)
+                            # Store original filename for position extraction
+                            original_filenames[temp_path] = f.filename
                 if image_paths:
                     files['image'] = image_paths
 
@@ -404,13 +407,25 @@ def edge_imaging():
             ocr_result = None
             if extract_measurements and ocr_available and image_temp_paths:
                 try:
-                    ocr_result = extract_measurements_from_multiple_images(image_temp_paths)
+                    ocr_result = extract_measurements_from_multiple_images(
+                        image_temp_paths, original_filenames=original_filenames
+                    )
                     if ocr_result.get('success_count', 0) > 0:
                         # Merge OCR measurements (they take precedence over manual)
                         ocr_measurements = measurements_to_test_format(ocr_result)
                         measurements.update(ocr_measurements)
-                        flash(f"Extracted measurements from {ocr_result['success_count']} image(s). "
-                              f"Found {ocr_result['overall_summary'].get('count', 0)} measurement points.", 'info')
+
+                        # Build informative flash message
+                        msg_parts = [f"Extracted measurements from {ocr_result['success_count']} image(s)"]
+                        msg_parts.append(f"Found {ocr_result['overall_summary'].get('count', 0)} total measurement points")
+
+                        # Mention per-image positions if any were detected
+                        per_image = ocr_result.get('per_image_summary', {})
+                        if per_image:
+                            positions = sorted(per_image.keys())
+                            msg_parts.append(f"Positions: {', '.join(positions)}")
+
+                        flash(". ".join(msg_parts) + ".", 'info')
                     else:
                         flash("Could not extract measurements from images. "
                               "Manual measurements will be used.", 'warning')
@@ -683,3 +698,90 @@ def flange_qc():
     return render_template('upload/flange_qc.html',
                          component_ids=component_ids,
                          prefill_component_id=prefill_component_id)
+
+
+@upload_bp.route('/maintenance', methods=['GET', 'POST'])
+def maintenance():
+    """Upload a maintenance log entry / comment for a component"""
+    if request.method == 'POST':
+        # Get form data
+        component_id = request.form.get('component_id', '').strip()
+        description = request.form.get('description', '').strip()
+        log_type = request.form.get('log_type', 'note').strip()
+        severity = request.form.get('severity', 'info').strip()
+        logged_by = request.form.get('logged_by', '').strip() or get_current_user()
+
+        # Validate required fields
+        if not component_id:
+            flash('Component ID is required.', 'danger')
+            return redirect(url_for('upload.maintenance'))
+
+        if not description:
+            flash('Description/comment is required.', 'danger')
+            return redirect(url_for('upload.maintenance'))
+
+        # Validate component exists
+        component = Component.get(component_id, g.db)
+        if not component:
+            flash(f"Component '{component_id}' not found.", 'danger')
+            return redirect(url_for('upload.maintenance'))
+
+        # Handle optional image upload
+        image_rel_path = None
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '':
+                if not allowed_image(file.filename):
+                    flash(f'Invalid image file type. Allowed: {", ".join(ALLOWED_IMAGE_EXTENSIONS)}', 'danger')
+                    return redirect(url_for('upload.maintenance'))
+
+                # Create storage directory: data_dir/maintenance/component_id/
+                maint_dir = os.path.join(g.db.data_dir, 'maintenance', component_id)
+                os.makedirs(maint_dir, exist_ok=True)
+
+                # Generate unique filename with timestamp
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                original_ext = Path(file.filename).suffix.lower()
+                safe_filename = secure_filename(file.filename)
+                base_name = Path(safe_filename).stem
+                filename = f"{timestamp}_{base_name}{original_ext}"
+                filepath = os.path.join(maint_dir, filename)
+
+                # Save the file
+                file.save(filepath)
+
+                # Store relative path for database
+                image_rel_path = os.path.relpath(filepath, g.db.data_dir)
+
+        try:
+            # Add maintenance log entry
+            log_id = add_maintenance_log(
+                component_id=component_id,
+                description=description,
+                log_type=log_type,
+                severity=severity,
+                logged_by=logged_by,
+                image_path=image_rel_path,
+                db=g.db
+            )
+
+            # Build success message
+            msg = f'Comment added successfully for component {component_id}'
+            if image_rel_path:
+                msg += ' with attached image'
+            flash(msg, 'success')
+            return redirect(url_for('components.component_detail', component_id=component_id))
+
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('upload.maintenance'))
+
+    # GET request - show the upload form
+    components = Component.list_all(db=g.db)
+    component_ids = [c.id for c in components]
+    prefill_component_id = request.args.get('component_id', '')
+
+    return render_template('upload/maintenance.html',
+                         component_ids=component_ids,
+                         prefill_component_id=prefill_component_id,
+                         allowed_image_extensions=ALLOWED_IMAGE_EXTENSIONS)

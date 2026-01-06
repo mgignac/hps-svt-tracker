@@ -141,6 +141,38 @@
         </div>
     </div>
 
+    <!-- Maintenance Comment Upload Card -->
+    <div class="col-md-4 mb-4">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-chat-left-text text-secondary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Comment / Log Entry</h5>
+                <p class="card-text text-muted">
+                    Add a comment, note, issue, or maintenance log entry
+                    for a component with optional photo.
+                </p>
+                <a href="{{ url_for('upload.maintenance') }}" class="btn btn-secondary">
+                    <i class="bi bi-plus-circle"></i> Add Comment
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-chat-left-text text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Comment / Log Entry</h5>
+                <p class="card-text text-muted">
+                    Add a comment, note, issue, or maintenance log entry
+                    for a component with optional photo.
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-plus-circle"></i> Add Comment
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="col-md-4 mb-4">
         <div class="card h-100 bg-light">
             <div class="card-body text-center">

@@ -767,6 +767,7 @@ def add_maintenance_log(component_id: str, description: str,
                        severity: str = 'info',
                        logged_by: Optional[str] = None,
                        resolution: Optional[str] = None,
+                       image_path: Optional[str] = None,
                        db: Optional[Database] = None) -> int:
     """
     Add a maintenance log entry for a component
@@ -778,6 +779,7 @@ def add_maintenance_log(component_id: str, description: str,
         severity: Severity level ('critical', 'warning', 'info')
         logged_by: Who created the log entry
         resolution: Resolution text (optional)
+        image_path: Relative path to attached image (optional)
         db: Database instance
 
     Returns:
@@ -804,10 +806,10 @@ def add_maintenance_log(component_id: str, description: str,
         cursor = conn.execute("""
             INSERT INTO maintenance_log
             (component_id, log_date, log_type, severity, description,
-             resolution, logged_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+             resolution, logged_by, image_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (component_id, datetime.now().isoformat(), log_type, severity,
-              description, resolution, logged_by))
+              description, resolution, logged_by, image_path))
 
         conn.commit()
         return cursor.lastrowid
