@@ -334,7 +334,7 @@
                         <td>{{ log.description }}</td>
                         <td>
                             {% if log.image_path %}
-                                <a href="{{ url_for('files.serve_data_file', filepath=log.image_path) }}" target="_blank" title="View photo">
+                                <a href="{{ url_for('files.serve_file', filepath=log.image_path) }}" target="_blank" title="View photo">
                                     <i class="bi bi-image text-primary"></i>
                                 </a>
                             {% else %}
