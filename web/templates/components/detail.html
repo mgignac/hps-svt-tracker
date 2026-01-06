@@ -265,6 +265,7 @@
                         <th>Removed</th>
                         <th>Run Period</th>
                         <th>Installed By</th>
+                        <th>Notes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -281,6 +282,7 @@
                         </td>
                         <td>{{ inst.run_period or '-' }}</td>
                         <td>{{ inst.installed_by or '-' }}</td>
+                        <td>{{ inst.notes or '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
