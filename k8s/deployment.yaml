@@ -1,0 +1,235 @@
+# =============================================================================
+# HPS SVT Tracker - Kubernetes Deployment
+# =============================================================================
+#
+# Usage:
+#   1. Create namespace:
+#      kubectl create namespace hps-svt-tracker
+#
+#   2. Create secret (update the secret key!):
+#      kubectl create secret generic svt-tracker-secret \
+#        --from-literal=secret-key='YOUR-SECURE-SECRET-KEY-HERE' \
+#        -n hps-svt-tracker
+#
+#   3. Apply this manifest:
+#      kubectl apply -f deployment.yaml -n hps-svt-tracker
+#
+# =============================================================================
+
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: svt-tracker-config
+  labels:
+    app: svt-tracker
+    component: config
+data:
+  FLASK_ENV: "production"
+  SVT_DB_PATH: "/data/db/svt_components.db"
+  SVT_DATA_DIR: "/data/test_data"
+  GUNICORN_WORKERS: "2"
+  GUNICORN_THREADS: "4"
+  GUNICORN_TIMEOUT: "120"
+
+---
+# PersistentVolumeClaim for data storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: svt-tracker-data
+  labels:
+    app: svt-tracker
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # Uncomment and set storageClassName if needed
+  # storageClassName: standard
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svt-tracker
+  labels:
+    app: svt-tracker
+    component: web
+spec:
+  replicas: 1  # Use 1 replica since SQLite doesn't support concurrent writes
+  selector:
+    matchLabels:
+      app: svt-tracker
+      component: web
+  strategy:
+    type: Recreate  # Recreate strategy for SQLite (no concurrent access)
+  template:
+    metadata:
+      labels:
+        app: svt-tracker
+        component: web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: svt-tracker
+          image: hps-svt-tracker:latest  # Update with your registry/image:tag
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: svt-tracker-config
+
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: svt-tracker-secret
+                  key: secret-key
+
+          volumeMounts:
+            - name: data
+              mountPath: /data
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: svt-tracker-data
+
+      # Optional: Node affinity, tolerations, etc.
+      # affinity:
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #         - matchExpressions:
+      #             - key: kubernetes.io/os
+      #               operator: In
+      #               values:
+      #                 - linux
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: svt-tracker
+  labels:
+    app: svt-tracker
+    component: web
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: svt-tracker
+    component: web
+
+---
+# Ingress (optional - uncomment and configure as needed)
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: svt-tracker
+#   labels:
+#     app: svt-tracker
+#     component: ingress
+#   annotations:
+#     # For nginx ingress controller
+#     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+#     # For cert-manager TLS
+#     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#     - host: svt-tracker.example.com  # Update with your domain
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: svt-tracker
+#                 port:
+#                   name: http
+#   # TLS configuration (optional)
+#   # tls:
+#   #   - hosts:
+#   #       - svt-tracker.example.com
+#   #     secretName: svt-tracker-tls
+
+---
+# NetworkPolicy (optional - for network isolation)
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: svt-tracker
+#   labels:
+#     app: svt-tracker
+# spec:
+#   podSelector:
+#     matchLabels:
+#       app: svt-tracker
+#   policyTypes:
+#     - Ingress
+#     - Egress
+#   ingress:
+#     - from:
+#         - namespaceSelector:
+#             matchLabels:
+#               name: ingress-nginx
+#       ports:
+#         - protocol: TCP
+#           port: 5000
+#   egress:
+#     - {}  # Allow all egress (DNS, etc.)

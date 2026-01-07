@@ -1,0 +1,33 @@
+# Kustomize configuration for HPS SVT Tracker
+#
+# Usage:
+#   kubectl apply -k k8s/ -n hps-svt-tracker
+#
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hps-svt-tracker
+
+resources:
+  - deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/name: svt-tracker
+  app.kubernetes.io/instance: svt-tracker
+  app.kubernetes.io/version: "0.1.0"
+  app.kubernetes.io/component: web
+  app.kubernetes.io/part-of: hps-svt-tracker
+  app.kubernetes.io/managed-by: kustomize
+
+# Image customization (update tag as needed)
+images:
+  - name: hps-svt-tracker
+    newName: hps-svt-tracker  # Update with your registry path
+    newTag: latest            # Update with your image tag
+
+# Secret generator (alternative to manual secret creation)
+# Uncomment and update the literal value, or use a file
+# secretGenerator:
+#   - name: svt-tracker-secret
+#     literals:
+#       - secret-key=YOUR-SECURE-SECRET-KEY-HERE
