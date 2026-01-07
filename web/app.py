@@ -27,6 +27,18 @@ COMPONENT_TYPE_DISPLAY_NAMES = {
     'other': 'Other',
 }
 
+# Display name mappings for test types
+TEST_TYPE_DISPLAY_NAMES = {
+    'iv_curve': 'IV Test',
+    'edge_imaging': 'Edge Imaging',
+    'flange_qc_test': 'Flange QC Test',
+    'noise_test': 'Noise Test',
+    'visual_inspection': 'Visual Inspection',
+    'burn_in': 'Burn-In Test',
+    'calibration': 'Calibration',
+    'other': 'Other',
+}
+
 
 def create_app(config_class=DevelopmentConfig):
     """
@@ -94,6 +106,17 @@ def create_app(config_class=DevelopmentConfig):
     def display_type_filter(type_name):
         """Convert internal component type name to human-readable display name"""
         return COMPONENT_TYPE_DISPLAY_NAMES.get(type_name, type_name)
+
+    @app.template_filter('display_test_type')
+    def display_test_type_filter(test_type):
+        """Convert internal test type name to human-readable display name"""
+        if not test_type:
+            return 'Unknown'
+        # Return mapped name, or format the raw name if not in mapping
+        if test_type in TEST_TYPE_DISPLAY_NAMES:
+            return TEST_TYPE_DISPLAY_NAMES[test_type]
+        # Fallback: replace underscores with spaces and title case
+        return test_type.replace('_', ' ').title()
 
     @app.template_filter('format_date')
     def format_date_filter(date_str, include_time=True):

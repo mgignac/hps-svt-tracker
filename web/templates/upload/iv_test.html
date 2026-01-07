@@ -76,55 +76,6 @@
                 </div>
             </div>
 
-            <!-- Measurements -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-speedometer2"></i> Measurements</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="bias_voltage" class="form-label">Bias Voltage (V)</label>
-                            <div class="input-group">
-                                <input type="number" step="any" class="form-control" id="bias_voltage" name="bias_voltage"
-                                       placeholder="e.g., 60">
-                                <span class="input-group-text">V</span>
-                            </div>
-                            <div class="form-text">Voltage at which leakage current was measured</div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="leakage_current" class="form-label">Leakage Current (A)</label>
-                            <div class="input-group">
-                                <input type="number" step="any" class="form-control" id="leakage_current" name="leakage_current"
-                                       placeholder="e.g., 2.3e-9">
-                                <span class="input-group-text">A</span>
-                            </div>
-                            <div class="form-text">Use scientific notation for small values (e.g., 2.3e-9)</div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="breakdown_voltage" class="form-label">Breakdown Voltage (V)</label>
-                            <div class="input-group">
-                                <input type="number" step="any" class="form-control" id="breakdown_voltage" name="breakdown_voltage"
-                                       placeholder="e.g., 80">
-                                <span class="input-group-text">V</span>
-                            </div>
-                            <div class="form-text">Voltage at which breakdown occurs (if measured)</div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="temperature" class="form-label">Temperature</label>
-                            <div class="input-group">
-                                <input type="number" step="any" class="form-control" id="temperature" name="temperature"
-                                       placeholder="e.g., 20">
-                                <span class="input-group-text">&deg;C</span>
-                            </div>
-                            <div class="form-text">Temperature during test</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- File Uploads -->
             <div class="card mb-4">
                 <div class="card-header">
@@ -135,29 +86,28 @@
                     <div class="mb-4">
                         <label for="raw_data" class="form-label">Raw Data Files</label>
                         <input type="file" class="form-control" id="raw_data" name="raw_data"
-                               accept=".csv,.txt,.dat,.tsv,.hdf5,.h5,.root,.json" multiple>
+                               accept=".csv,.txt,.dat,.tsv,.hdf5,.h5,.root,.json,.xlsx,.xls" multiple>
                         <div class="form-text">
                             IV curve data (voltage/current pairs). Allowed: {{ allowed_data_extensions|join(', ') }}
                         </div>
                     </div>
 
-                    <!-- Plot Files -->
-                    <div class="mb-3">
-                        <label for="plots" class="form-label">Plot Files</label>
-                        <input type="file" class="form-control" id="plots" name="plots"
-                               accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif" multiple>
-                        <div class="form-text">
-                            IV curve plots or other visualizations. Allowed: {{ allowed_image_extensions|join(', ') }}
+                    <!-- Auto-analyze option -->
+                    {% if iv_analysis_available %}
+                    <div class="mb-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="analyze_data" name="analyze_data" checked>
+                            <label class="form-check-label" for="analyze_data">
+                                <i class="bi bi-graph-up-arrow text-primary"></i>
+                                <strong>Auto-analyze data file</strong>
+                            </label>
+                        </div>
+                        <div class="form-text ms-4">
+                            Automatically extract measurements and generate IV curve plot from uploaded data file.
+                            Supports Excel (.xlsx, .xls), CSV, and text files with voltage/current columns.
                         </div>
                     </div>
-
-                    <!-- Plot Preview -->
-                    <div id="plot-preview-container" style="display: none;">
-                        <label class="form-label">Plot Preview <span id="plot-count" class="badge bg-secondary"></span></label>
-                        <div class="border rounded p-2 bg-light">
-                            <div id="plot-previews" class="d-flex flex-wrap gap-2 justify-content-center"></div>
-                        </div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -226,14 +176,29 @@
 
                 <hr>
 
+                <h6>Automatic Analysis</h6>
+                <p class="small">
+                    Upload an Excel or CSV file with IV data and the system will:
+                </p>
+                <ul class="small">
+                    <li>Extract voltage range and current at max voltage</li>
+                    <li>Generate an IV curve plot automatically</li>
+                    <li>Store all data points for future reference</li>
+                </ul>
+
+                <hr>
+
                 <h6>Expected Data Format</h6>
                 <p class="small">
-                    Raw data files should contain voltage/current pairs:
+                    Data files should have two columns (no headers required):
                 </p>
-                <pre class="small bg-light p-2 rounded"># Voltage (V), Current (A)
-0.0, 1.2e-12
-10.0, 5.4e-11
-20.0, 1.1e-10
+                <pre class="small bg-light p-2 rounded">Column 1: Voltage (V)
+Column 2: Current (A)
+
+Example:
+0, 2.95e-05
+5, 2.01e-06
+10, 2.05e-06
 ...</pre>
 
                 <hr>
@@ -251,51 +216,4 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// Plot preview functionality
-document.getElementById('plots').addEventListener('change', function(e) {
-    const files = e.target.files;
-    const previewContainer = document.getElementById('plot-preview-container');
-    const previewsDiv = document.getElementById('plot-previews');
-    const fileCount = document.getElementById('plot-count');
-
-    previewsDiv.innerHTML = '';
-
-    if (files.length > 0) {
-        fileCount.textContent = files.length + ' file' + (files.length > 1 ? 's' : '');
-        previewContainer.style.display = 'block';
-
-        Array.from(files).forEach(function(file, index) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.alt = 'Preview ' + (index + 1);
-                img.className = 'img-thumbnail';
-                img.style.maxHeight = '150px';
-                img.style.maxWidth = '200px';
-                previewsDiv.appendChild(img);
-            };
-            reader.readAsDataURL(file);
-        });
-    } else {
-        previewContainer.style.display = 'none';
-    }
-});
-
-// Auto-format scientific notation for current input
-document.getElementById('leakage_current').addEventListener('blur', function(e) {
-    const value = e.target.value.trim();
-    if (value && !isNaN(parseFloat(value))) {
-        const num = parseFloat(value);
-        // If very small number, suggest scientific notation
-        if (Math.abs(num) < 0.001 && num !== 0) {
-            e.target.value = num.toExponential(2);
-        }
-    }
-});
-</script>
 {% endblock %}

@@ -221,7 +221,7 @@
                     {% for test in tests %}
                     <tr>
                         <td>{{ test.test_date|format_date }}</td>
-                        <td>{{ test.test_type }}</td>
+                        <td>{{ test.test_type|display_test_type }}</td>
                         <td>
                             {% if test.pass_fail %}
                                 <span class="test-pass"><i class="bi bi-check-circle"></i> PASS</span>

@@ -161,7 +161,7 @@
                                         {{ test.component_id }}
                                     </a>
                                 </td>
-                                <td>{{ test.test_type }}</td>
+                                <td>{{ test.test_type|display_test_type }}</td>
                                 <td>{{ test.test_date|format_date(include_time=false) }}</td>
                                 <td>
                                     {% if test.pass_fail %}

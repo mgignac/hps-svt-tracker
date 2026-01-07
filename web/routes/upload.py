@@ -21,7 +21,7 @@ upload_bp = Blueprint('upload', __name__)
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif'}
 
 # Allowed data file extensions
-ALLOWED_DATA_EXTENSIONS = {'csv', 'txt', 'dat', 'tsv', 'hdf5', 'h5', 'root', 'json'}
+ALLOWED_DATA_EXTENSIONS = {'csv', 'txt', 'dat', 'tsv', 'hdf5', 'h5', 'root', 'json', 'xlsx', 'xls'}
 
 # Legacy alias
 ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS
@@ -165,7 +165,14 @@ def picture():
 
 @upload_bp.route('/iv-test', methods=['GET', 'POST'])
 def iv_test():
-    """Upload an IV (Current-Voltage) test result"""
+    """Upload an IV (Current-Voltage) test result with automatic data analysis"""
+    # Import IV analysis utilities
+    try:
+        from hps_svt_tracker.plotting import analyze_iv_file
+        iv_analysis_available = True
+    except ImportError:
+        iv_analysis_available = False
+
     if request.method == 'POST':
         # Get form data
         component_id = request.form.get('component_id', '').strip()
@@ -173,6 +180,7 @@ def iv_test():
         test_setup = request.form.get('test_setup', '').strip()
         test_conditions = request.form.get('test_conditions', '').strip()
         notes = request.form.get('notes', '').strip()
+        analyze_data = request.form.get('analyze_data') == 'on'
 
         # Pass/fail
         pass_fail_value = request.form.get('pass_fail', '')
@@ -181,12 +189,6 @@ def iv_test():
             pass_fail = True
         elif pass_fail_value == 'fail':
             pass_fail = False
-
-        # Measurements
-        bias_voltage = request.form.get('bias_voltage', '').strip()
-        leakage_current = request.form.get('leakage_current', '').strip()
-        temperature = request.form.get('temperature', '').strip()
-        breakdown_voltage = request.form.get('breakdown_voltage', '').strip()
 
         # Validate component exists
         if not component_id:
@@ -198,43 +200,20 @@ def iv_test():
             flash(f"Component '{component_id}' not found.", 'danger')
             return redirect(url_for('upload.iv_test'))
 
-        # Build measurements dict
+        # Measurements will be populated by analysis
         measurements = {}
-        if bias_voltage:
-            try:
-                measurements['voltage_measured'] = float(bias_voltage)
-            except ValueError:
-                flash('Bias voltage must be a number.', 'danger')
-                return redirect(url_for('upload.iv_test'))
-
-        if leakage_current:
-            try:
-                measurements['current_measured'] = float(leakage_current)
-            except ValueError:
-                flash('Leakage current must be a number.', 'danger')
-                return redirect(url_for('upload.iv_test'))
-
-        if temperature:
-            try:
-                measurements['temperature'] = float(temperature)
-            except ValueError:
-                flash('Temperature must be a number.', 'danger')
-                return redirect(url_for('upload.iv_test'))
-
-        if breakdown_voltage:
-            try:
-                measurements['breakdown_voltage'] = float(breakdown_voltage)
-            except ValueError:
-                flash('Breakdown voltage must be a number.', 'danger')
-                return redirect(url_for('upload.iv_test'))
 
         # Process file uploads
         files = {}
         temp_files = []  # Track temp files for cleanup
+        generated_plot_path = None  # Track auto-generated plot
 
         try:
             # Raw data files
             raw_data_files = request.files.getlist('raw_data')
+            analyzable_extensions = {'.xlsx', '.xls', '.csv', '.txt', '.dat', '.tsv'}
+            analyzed_file = None
+
             if raw_data_files:
                 raw_data_paths = []
                 for f in raw_data_files:
@@ -246,24 +225,48 @@ def iv_test():
                         if temp_path:
                             raw_data_paths.append(temp_path)
                             temp_files.append(temp_path)
+
+                            # Check if this file can be analyzed
+                            ext = Path(f.filename).suffix.lower()
+                            if analyze_data and iv_analysis_available and ext in analyzable_extensions and not analyzed_file:
+                                analyzed_file = temp_path
+
                 if raw_data_paths:
                     files['raw_data'] = raw_data_paths
 
-            # Plot files
-            plot_files = request.files.getlist('plots')
-            if plot_files:
-                plot_paths = []
-                for f in plot_files:
-                    if f.filename != '':
-                        if not allowed_image(f.filename):
-                            flash(f"Invalid plot file type: {f.filename}", 'warning')
-                            continue
-                        temp_path = save_temp_file(f)
-                        if temp_path:
-                            plot_paths.append(temp_path)
-                            temp_files.append(temp_path)
-                if plot_paths:
-                    files['plot'] = plot_paths
+            # Perform IV analysis if enabled and we have an analyzable file
+            if analyzed_file:
+                analysis_result = analyze_iv_file(analyzed_file, component_id)
+
+                if analysis_result['success']:
+                    # Merge analyzed measurements (they take precedence over manual)
+                    analyzed_measurements = analysis_result['measurements']
+
+                    # Update measurements with analyzed values
+                    measurements.update(analyzed_measurements)
+
+                    # Generate and save the IV curve plot
+                    if analysis_result['plot_bytes']:
+                        # Save plot to temp file
+                        fd, plot_temp_path = tempfile.mkstemp(suffix='.png')
+                        os.close(fd)
+                        with open(plot_temp_path, 'wb') as f:
+                            f.write(analysis_result['plot_bytes'])
+                        temp_files.append(plot_temp_path)
+                        generated_plot_path = plot_temp_path
+
+                        # Add to plot files
+                        if 'plot' not in files:
+                            files['plot'] = []
+                        files['plot'].append(plot_temp_path)
+
+                    # Build informative flash message
+                    msg_parts = [f"Analyzed IV data: {analyzed_measurements.get('num_points', 0)} data points"]
+                    msg_parts.append(f"Voltage range: {analyzed_measurements.get('voltage_min', 0):.0f} - {analyzed_measurements.get('voltage_max', 0):.0f} V")
+                    msg_parts.append(f"Current @ max V: {analyzed_measurements.get('current_at_max_voltage', 0):.2e} A")
+                    flash(". ".join(msg_parts), 'info')
+                else:
+                    flash(f"Could not analyze data file: {analysis_result['error']}", 'warning')
 
             # Create test result
             test_result = TestResult(
@@ -307,7 +310,7 @@ def iv_test():
                          component_ids=component_ids,
                          prefill_component_id=prefill_component_id,
                          allowed_data_extensions=ALLOWED_DATA_EXTENSIONS,
-                         allowed_image_extensions=ALLOWED_IMAGE_EXTENSIONS)
+                         iv_analysis_available=iv_analysis_available)
 
 
 @upload_bp.route('/edge-imaging', methods=['GET', 'POST'])

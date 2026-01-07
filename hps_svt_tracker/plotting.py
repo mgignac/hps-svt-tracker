@@ -5,14 +5,266 @@ Generates summary plots for test results across components.
 """
 import io
 import json
+import os
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for server
 import matplotlib.pyplot as plt
+import numpy as np
 
 from .database import Database, get_default_db
 from .models import Component, TestResult
+
+
+# =============================================================================
+# IV Curve Analysis Functions
+# =============================================================================
+
+def read_iv_data(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Read IV (current-voltage) data from a file.
+
+    Supports:
+    - Excel files (.xlsx, .xls): First column = voltage, second column = current
+    - CSV files (.csv): First column = voltage, second column = current
+    - Text files (.txt, .dat, .tsv): Space/tab/comma separated
+
+    Args:
+        file_path: Path to the data file
+
+    Returns:
+        Tuple of (voltage_array, current_array) as numpy arrays
+
+    Raises:
+        ValueError: If file format is not supported or data cannot be parsed
+    """
+    ext = Path(file_path).suffix.lower()
+
+    if ext in ('.xlsx', '.xls'):
+        # Excel file
+        try:
+            import pandas as pd
+            df = pd.read_excel(file_path, header=None)
+            # Assume first row might be header if non-numeric
+            try:
+                float(df.iloc[0, 0])
+                # First row is data
+                voltage = df.iloc[:, 0].astype(float).values
+                current = df.iloc[:, 1].astype(float).values
+            except (ValueError, TypeError):
+                # First row is header, skip it
+                voltage = df.iloc[1:, 0].astype(float).values
+                current = df.iloc[1:, 1].astype(float).values
+        except ImportError:
+            raise ValueError("pandas and openpyxl are required to read Excel files. "
+                           "Install with: pip install pandas openpyxl")
+
+    elif ext == '.csv':
+        # CSV file
+        try:
+            data = np.genfromtxt(file_path, delimiter=',', skip_header=0)
+            if np.isnan(data[0, 0]):
+                # First row was header
+                data = np.genfromtxt(file_path, delimiter=',', skip_header=1)
+            voltage = data[:, 0]
+            current = data[:, 1]
+        except Exception as e:
+            raise ValueError(f"Could not parse CSV file: {e}")
+
+    elif ext in ('.txt', '.dat', '.tsv'):
+        # Text file - try various delimiters
+        for delimiter in ['\t', ' ', ',', ';']:
+            try:
+                data = np.genfromtxt(file_path, delimiter=delimiter, skip_header=0)
+                if data.ndim == 2 and data.shape[1] >= 2:
+                    if np.isnan(data[0, 0]):
+                        data = np.genfromtxt(file_path, delimiter=delimiter, skip_header=1)
+                    voltage = data[:, 0]
+                    current = data[:, 1]
+                    break
+            except Exception:
+                continue
+        else:
+            raise ValueError("Could not parse text file with any common delimiter")
+
+    else:
+        raise ValueError(f"Unsupported file format: {ext}")
+
+    # Validate data
+    if len(voltage) == 0 or len(current) == 0:
+        raise ValueError("No data found in file")
+
+    if len(voltage) != len(current):
+        raise ValueError("Voltage and current arrays have different lengths")
+
+    return voltage, current
+
+
+def analyze_iv_data(voltage: np.ndarray, current: np.ndarray) -> Dict[str, Any]:
+    """
+    Analyze IV curve data and extract key measurements.
+
+    Args:
+        voltage: Array of voltage values (V)
+        current: Array of current values (A)
+
+    Returns:
+        Dictionary containing:
+        - voltage_max: Maximum voltage in the data
+        - voltage_min: Minimum voltage in the data
+        - current_at_max_voltage: Current at maximum voltage
+        - current_max: Maximum current
+        - current_min: Minimum current
+        - current_mean: Mean current
+        - num_points: Number of data points
+        - voltage_values: List of all voltage values
+        - current_values: List of all current values
+    """
+    # Sort by voltage for consistent analysis
+    sort_idx = np.argsort(voltage)
+    voltage = voltage[sort_idx]
+    current = current[sort_idx]
+
+    # Take absolute values of current (can be negative in some measurement setups)
+    current_abs = np.abs(current)
+
+    measurements = {
+        'voltage_max': float(voltage.max()),
+        'voltage_min': float(voltage.min()),
+        'voltage_measured': float(voltage.max()),  # For compatibility with existing schema
+        'current_at_max_voltage': float(current_abs[np.argmax(voltage)]),
+        'current_measured': float(current_abs[np.argmax(voltage)]),  # For compatibility
+        'current_max': float(current_abs.max()),
+        'current_min': float(current_abs.min()),
+        'current_mean': float(current_abs.mean()),
+        'num_points': len(voltage),
+        'voltage_values': voltage.tolist(),
+        'current_values': current.tolist(),
+    }
+
+    return measurements
+
+
+def generate_iv_curve_plot(voltage: np.ndarray, current: np.ndarray,
+                           component_id: str = None,
+                           title: str = None) -> bytes:
+    """
+    Generate an IV curve plot.
+
+    Args:
+        voltage: Array of voltage values (V)
+        current: Array of current values (A)
+        component_id: Optional component ID for the title
+        title: Optional custom title
+
+    Returns:
+        PNG image as bytes
+    """
+    # Sort by voltage
+    sort_idx = np.argsort(voltage)
+    voltage = voltage[sort_idx]
+    current = current[sort_idx]
+
+    # Remove the first data point (often an outlier at 0V)
+    if len(voltage) > 1:
+        voltage = voltage[1:]
+        current = current[1:]
+
+    # Take absolute value of current and convert to µA
+    current_ua = np.abs(current) * 1e6
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Plot IV curve
+    ax.plot(voltage, current_ua, 'b-', linewidth=1.5, marker='o', markersize=4)
+
+    # Labels and title
+    ax.set_xlabel('Bias Voltage (V)', fontsize=12)
+    ax.set_ylabel('Leakage Current (µA)', fontsize=12)
+
+    if title:
+        ax.set_title(title, fontsize=14, fontweight='bold')
+    elif component_id:
+        ax.set_title(f'IV Curve - {component_id}', fontsize=14, fontweight='bold')
+    else:
+        ax.set_title('IV Curve', fontsize=14, fontweight='bold')
+
+    # Grid
+    ax.grid(True, linestyle='--', alpha=0.7)
+
+    # Add annotation - prefer 100V if it exists, otherwise use max voltage
+    annotation_idx = None
+    annotation_voltage = None
+
+    # Look for 100V in the data
+    v100_indices = np.where(np.isclose(voltage, 100, atol=1))[0]
+    if len(v100_indices) > 0:
+        annotation_idx = v100_indices[0]
+        annotation_voltage = voltage[annotation_idx]
+    else:
+        # Fall back to max voltage
+        annotation_idx = np.argmax(voltage)
+        annotation_voltage = voltage[annotation_idx]
+
+    current_at_annotation = current_ua[annotation_idx]
+    ax.annotate(f'I @ {annotation_voltage:.0f}V = {current_at_annotation:.2f} µA',
+                xy=(annotation_voltage, current_at_annotation),
+                xytext=(0.7, 0.9), textcoords='axes fraction',
+                fontsize=10,
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+                arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.2'))
+
+    plt.tight_layout()
+
+    # Save to bytes
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+    buf.seek(0)
+    plt.close(fig)
+
+    return buf.getvalue()
+
+
+def analyze_iv_file(file_path: str, component_id: str = None) -> Dict[str, Any]:
+    """
+    Read and analyze an IV data file, returning measurements and plot.
+
+    Args:
+        file_path: Path to the IV data file
+        component_id: Optional component ID for plot title
+
+    Returns:
+        Dictionary containing:
+        - measurements: Extracted measurements dict
+        - plot_bytes: PNG plot as bytes
+        - success: Boolean indicating success
+        - error: Error message if failed
+    """
+    try:
+        voltage, current = read_iv_data(file_path)
+        measurements = analyze_iv_data(voltage, current)
+        plot_bytes = generate_iv_curve_plot(voltage, current, component_id)
+
+        return {
+            'success': True,
+            'measurements': measurements,
+            'plot_bytes': plot_bytes,
+            'error': None
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'measurements': {},
+            'plot_bytes': None,
+            'error': str(e)
+        }
+
+
+# =============================================================================
+# Summary Plot Functions
+# =============================================================================
 
 
 def generate_edge_imaging_summary(db: Optional[Database] = None) -> Tuple[bytes, List[Dict[str, Any]]]:
@@ -470,7 +722,7 @@ def generate_edge_imaging_lcr_plot(db: Optional[Database] = None) -> Tuple[bytes
 
 def generate_edge_slope_plot(db: Optional[Database] = None) -> Tuple[bytes, List[Dict[str, Any]]]:
     """
-    Generate a bar plot of edge slope values across all sensors.
+    Generate a scatter plot of edge slope values across all sensors.
 
     Plots the edge slope in µm/mm for each sensor that has L, C, R measurements.
     Color-coded by R² fit quality.
@@ -553,7 +805,7 @@ def generate_edge_slope_plot(db: Optional[Database] = None) -> Tuple[bytes, List
             else:
                 colors.append('#d62728')  # Red for poor fit
 
-        bars = ax.bar(x_positions, slopes, color=colors, edgecolor='black', linewidth=0.5)
+        ax.scatter(x_positions, slopes, c=colors, s=80, edgecolor='black', linewidth=0.5, zorder=3)
 
         # Add a horizontal line at y=0 for reference
         ax.axhline(y=0, color='gray', linestyle='-', linewidth=0.5)
