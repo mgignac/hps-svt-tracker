@@ -22,8 +22,34 @@
 <div class="row">
     <div class="col-md-8">
         <form method="post" enctype="multipart/form-data">
-            <!-- Component Selection -->
+            <!-- Upload Mode Toggle -->
             <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-toggles"></i> Upload Mode</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group w-100" role="group" aria-label="Upload mode">
+                        <input type="radio" class="btn-check" name="upload_mode" id="mode_single" value="single" checked>
+                        <label class="btn btn-outline-primary" for="mode_single">
+                            <i class="bi bi-file-earmark"></i> Single Upload
+                        </label>
+                        <input type="radio" class="btn-check" name="upload_mode" id="mode_bulk" value="bulk">
+                        <label class="btn btn-outline-primary" for="mode_bulk">
+                            <i class="bi bi-files"></i> Bulk Upload
+                        </label>
+                    </div>
+                    <div class="form-text mt-2">
+                        <span id="mode_description_single">Upload a single IV test for one component.</span>
+                        <span id="mode_description_bulk" style="display: none;">
+                            Upload multiple files at once. Component ID is extracted from filename
+                            (e.g., <code>W01_S2_data.xlsx</code> → <code>W1-S2-2025</code>).
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Component Selection (Single mode only) -->
+            <div class="card mb-4" id="component_card">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-cpu"></i> Component</h5>
                 </div>
@@ -31,7 +57,7 @@
                     <div class="mb-3">
                         <label for="component_id" class="form-label">Component ID <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="component_id" name="component_id"
-                               list="component_list" required
+                               list="component_list"
                                placeholder="Enter or select a component ID"
                                value="{{ prefill_component_id }}">
                         <datalist id="component_list">
@@ -212,8 +238,47 @@ Example:
                     <li>Breakdown voltage above safety margin</li>
                     <li>No anomalous current spikes</li>
                 </ul>
+
+                <hr>
+
+                <h6>Bulk Upload</h6>
+                <p class="small">
+                    For bulk uploads, sensor IDs are extracted from filenames:
+                </p>
+                <pre class="small bg-light p-2 rounded">W01_S2_data.xlsx → W1-S2-2025
+W03_S5_test.csv  → W3-S5-2025</pre>
+                <p class="small mb-0">
+                    Format: <code>W##_S#_*</code> where ## is wafer number and # is sensor number.
+                </p>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle between single and bulk upload modes
+document.querySelectorAll('input[name="upload_mode"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        const isBulk = this.value === 'bulk';
+        const componentCard = document.getElementById('component_card');
+        const componentInput = document.getElementById('component_id');
+        const descSingle = document.getElementById('mode_description_single');
+        const descBulk = document.getElementById('mode_description_bulk');
+
+        if (isBulk) {
+            componentCard.style.display = 'none';
+            componentInput.removeAttribute('required');
+            descSingle.style.display = 'none';
+            descBulk.style.display = 'inline';
+        } else {
+            componentCard.style.display = 'block';
+            componentInput.setAttribute('required', 'required');
+            descSingle.style.display = 'inline';
+            descBulk.style.display = 'none';
+        }
+    });
+});
+</script>
 {% endblock %}

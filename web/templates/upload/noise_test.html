@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Noise Test - {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('upload.index') }}">Upload</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Noise Test</li>
+    </ol>
+</nav>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1><i class="bi bi-soundwave"></i> Upload Noise Test</h1>
+        <p class="text-muted">Upload noise test plots for a hybrid component</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <form method="post" enctype="multipart/form-data">
+            <!-- Component Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cpu"></i> Hybrid</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="component_id" class="form-label">Hybrid ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="component_id" name="component_id"
+                               list="component_list" required
+                               placeholder="Enter or select a hybrid ID"
+                               value="{{ prefill_component_id }}">
+                        <datalist id="component_list">
+                            {% for comp_id in component_ids %}
+                            <option value="{{ comp_id }}">
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text">Only hybrid components are shown</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Result -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Test Result</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Pass/Fail Status</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_pass" value="pass">
+                                <label class="form-check-label text-success" for="pass_fail_pass">
+                                    <i class="bi bi-check-circle"></i> Pass
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_fail" value="fail">
+                                <label class="form-check-label text-danger" for="pass_fail_fail">
+                                    <i class="bi bi-x-circle"></i> Fail
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="pass_fail" id="pass_fail_na" value="" checked>
+                                <label class="form-check-label text-muted" for="pass_fail_na">
+                                    N/A
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tar File Upload -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-zip"></i> Plot Archive</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label for="plots_tar" class="form-label">Plots Tar File <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="plots_tar" name="plots_tar"
+                               accept=".tar,.tar.gz,.tgz" required>
+                        <div class="form-text">Tar archive containing noise test plots (PNG, JPG, etc.)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="file_filter" class="form-label">
+                            <i class="bi bi-funnel text-primary"></i> File Filter (optional)
+                        </label>
+                        <input type="text" class="form-control" id="file_filter" name="file_filter"
+                               placeholder="e.g., Hybrid-L0-01">
+                        <div class="form-text">
+                            Only files containing this string will be uploaded (case-insensitive).
+                            Use this to filter plots for a specific hybrid when the tar contains data for multiple components.
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i>
+                        Only image files (PNG, JPG, GIF, BMP, TIFF) will be extracted from the archive.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Metadata -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Test Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tested_by" class="form-label">Tested By</label>
+                            <input type="text" class="form-control" id="tested_by" name="tested_by"
+                                   placeholder="Leave blank for current user">
+                            <div class="form-text">Defaults to your system username</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="test_setup" class="form-label">Test Setup</label>
+                            <input type="text" class="form-control" id="test_setup" name="test_setup"
+                                   placeholder="e.g., Test Stand 1">
+                            <div class="form-text">Equipment or test bench used</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="test_conditions" class="form-label">Test Conditions</label>
+                        <textarea class="form-control" id="test_conditions" name="test_conditions" rows="2"
+                                  placeholder="e.g., Room temperature, bias voltage settings..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                                  placeholder="Any additional observations or comments"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-upload"></i> Submit Noise Test
+                </button>
+                <a href="{{ url_for('upload.index') }}" class="btn btn-outline-secondary btn-lg">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Help Panel -->
+    <div class="col-md-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Noise Test Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6>What is a Noise Test?</h6>
+                <p class="small">
+                    A noise test characterizes the electronic noise performance of a hybrid,
+                    measuring baseline levels and noise distributions across all channels.
+                </p>
+
+                <hr>
+
+                <h6>File Filter</h6>
+                <p class="small">
+                    If your tar file contains plots for multiple hybrids, use the filter field
+                    to select only files for the target component.
+                </p>
+                <p class="small mb-0">
+                    <strong>Example:</strong> If uploading for <code>Hybrid-L0-05</code>, enter
+                    <code>Hybrid-L0-05</code> or <code>L0-05</code> in the filter field.
+                </p>
+
+                <hr>
+
+                <h6>Expected Tar Contents</h6>
+                <p class="small mb-0">
+                    The tar file should contain image files showing:
+                </p>
+                <ul class="small">
+                    <li>Channel noise distributions</li>
+                    <li>Baseline measurements</li>
+                    <li>Noise vs channel plots</li>
+                    <li>Any other diagnostic plots</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

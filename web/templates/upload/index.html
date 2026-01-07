@@ -141,6 +141,38 @@
         </div>
     </div>
 
+    <!-- Noise Test Upload Card -->
+    <div class="col-md-4 mb-4">
+        <!-- Active state (edit mode) -->
+        <div class="card h-100 edit-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-soundwave text-purple" style="font-size: 3rem; color: #6f42c1;"></i>
+                <h5 class="card-title mt-3">Noise Test</h5>
+                <p class="card-text text-muted">
+                    Upload noise test plots for a hybrid component
+                    from a tar archive with optional file filtering.
+                </p>
+                <a href="{{ url_for('upload.noise_test') }}" class="btn btn-purple" style="background-color: #6f42c1; border-color: #6f42c1; color: white;">
+                    <i class="bi bi-upload"></i> Upload Noise Test
+                </a>
+            </div>
+        </div>
+        <!-- Disabled state (view mode) -->
+        <div class="card h-100 bg-light view-mode-only">
+            <div class="card-body text-center">
+                <i class="bi bi-soundwave text-muted" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3 text-muted">Noise Test</h5>
+                <p class="card-text text-muted">
+                    Upload noise test plots for a hybrid component
+                    from a tar archive with optional file filtering.
+                </p>
+                <button class="btn btn-secondary" disabled>
+                    <i class="bi bi-upload"></i> Upload Noise Test
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Maintenance Comment Upload Card -->
     <div class="col-md-4 mb-4">
         <!-- Active state (edit mode) -->

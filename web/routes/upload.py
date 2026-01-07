@@ -3,6 +3,7 @@ Upload routes for HPS SVT Tracker web interface
 Handles file uploads including component images and test results
 """
 import os
+import re
 import getpass
 import tempfile
 import tarfile
@@ -16,6 +17,37 @@ from hps_svt_tracker.models import Component, TestResult, add_maintenance_log, i
 
 
 upload_bp = Blueprint('upload', __name__)
+
+
+def parse_sensor_id_from_filename(filename):
+    """
+    Extract sensor ID from filename.
+
+    Expected format: W##_S#_* (e.g., W01_S2_data.xlsx)
+    Returns: Sensor ID in format W#-S#-2025 (e.g., W1-S2-2025)
+
+    Args:
+        filename: The filename to parse
+
+    Returns:
+        Tuple of (sensor_id, success). If parsing fails, returns (None, False).
+    """
+    # Get just the filename without path
+    basename = Path(filename).stem
+
+    # Match pattern: W followed by digits, underscore, S followed by digit(s)
+    # Examples: W01_S2, W03_S5, W12_S10
+    match = re.match(r'^W(\d+)_S(\d+)', basename, re.IGNORECASE)
+
+    if match:
+        # Remove leading zeros from wafer number
+        wafer_num = int(match.group(1))
+        sensor_num = match.group(2)
+        # Format as W#-S#-2025
+        sensor_id = f"W{wafer_num}-S{sensor_num}-2025"
+        return sensor_id, True
+
+    return None, False
 
 # Allowed image extensions
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif'}
@@ -175,7 +207,7 @@ def iv_test():
 
     if request.method == 'POST':
         # Get form data
-        component_id = request.form.get('component_id', '').strip()
+        upload_mode = request.form.get('upload_mode', 'single')
         tested_by = request.form.get('tested_by', '').strip() or get_current_user()
         test_setup = request.form.get('test_setup', '').strip()
         test_conditions = request.form.get('test_conditions', '').strip()
@@ -190,116 +222,36 @@ def iv_test():
         elif pass_fail_value == 'fail':
             pass_fail = False
 
-        # Validate component exists
-        if not component_id:
-            flash('Component ID is required.', 'danger')
-            return redirect(url_for('upload.iv_test'))
+        # Get uploaded files
+        raw_data_files = request.files.getlist('raw_data')
+        analyzable_extensions = {'.xlsx', '.xls', '.csv', '.txt', '.dat', '.tsv'}
 
-        component = Component.get(component_id, g.db)
-        if not component:
-            flash(f"Component '{component_id}' not found.", 'danger')
-            return redirect(url_for('upload.iv_test'))
-
-        # Measurements will be populated by analysis
-        measurements = {}
-
-        # Process file uploads
-        files = {}
-        temp_files = []  # Track temp files for cleanup
-        generated_plot_path = None  # Track auto-generated plot
-
-        try:
-            # Raw data files
-            raw_data_files = request.files.getlist('raw_data')
-            analyzable_extensions = {'.xlsx', '.xls', '.csv', '.txt', '.dat', '.tsv'}
-            analyzed_file = None
-
-            if raw_data_files:
-                raw_data_paths = []
-                for f in raw_data_files:
-                    if f.filename != '':
-                        if not allowed_data(f.filename):
-                            flash(f"Invalid data file type: {f.filename}", 'warning')
-                            continue
-                        temp_path = save_temp_file(f)
-                        if temp_path:
-                            raw_data_paths.append(temp_path)
-                            temp_files.append(temp_path)
-
-                            # Check if this file can be analyzed
-                            ext = Path(f.filename).suffix.lower()
-                            if analyze_data and iv_analysis_available and ext in analyzable_extensions and not analyzed_file:
-                                analyzed_file = temp_path
-
-                if raw_data_paths:
-                    files['raw_data'] = raw_data_paths
-
-            # Perform IV analysis if enabled and we have an analyzable file
-            if analyzed_file:
-                analysis_result = analyze_iv_file(analyzed_file, component_id)
-
-                if analysis_result['success']:
-                    # Merge analyzed measurements (they take precedence over manual)
-                    analyzed_measurements = analysis_result['measurements']
-
-                    # Update measurements with analyzed values
-                    measurements.update(analyzed_measurements)
-
-                    # Generate and save the IV curve plot
-                    if analysis_result['plot_bytes']:
-                        # Save plot to temp file
-                        fd, plot_temp_path = tempfile.mkstemp(suffix='.png')
-                        os.close(fd)
-                        with open(plot_temp_path, 'wb') as f:
-                            f.write(analysis_result['plot_bytes'])
-                        temp_files.append(plot_temp_path)
-                        generated_plot_path = plot_temp_path
-
-                        # Add to plot files
-                        if 'plot' not in files:
-                            files['plot'] = []
-                        files['plot'].append(plot_temp_path)
-
-                    # Build informative flash message
-                    msg_parts = [f"Analyzed IV data: {analyzed_measurements.get('num_points', 0)} data points"]
-                    msg_parts.append(f"Voltage range: {analyzed_measurements.get('voltage_min', 0):.0f} - {analyzed_measurements.get('voltage_max', 0):.0f} V")
-                    msg_parts.append(f"Current @ max V: {analyzed_measurements.get('current_at_max_voltage', 0):.2e} A")
-                    flash(". ".join(msg_parts), 'info')
-                else:
-                    flash(f"Could not analyze data file: {analysis_result['error']}", 'warning')
-
-            # Create test result
-            test_result = TestResult(
-                component_id=component_id,
-                test_type='iv_curve',
-                pass_fail=pass_fail,
-                measurements=measurements if measurements else None,
-                files=files if files else None,
-                tested_by=tested_by,
-                test_setup=test_setup or None,
-                test_conditions=test_conditions or None,
-                notes=notes or None
+        if upload_mode == 'bulk':
+            # Bulk upload mode - process each file as a separate test
+            return _handle_bulk_iv_upload(
+                raw_data_files, analyzable_extensions, analyze_data,
+                iv_analysis_available, tested_by, test_setup, test_conditions,
+                notes, pass_fail
             )
+        else:
+            # Single upload mode
+            component_id = request.form.get('component_id', '').strip()
 
-            test_id = test_result.save(g.db)
+            # Validate component exists
+            if not component_id:
+                flash('Component ID is required.', 'danger')
+                return redirect(url_for('upload.iv_test'))
 
-            # Build success message
-            file_count = len(test_result.stored_files) if test_result.stored_files else 0
-            msg = f'IV test recorded successfully (Test ID: {test_id})'
-            if file_count > 0:
-                msg += f' with {file_count} file(s)'
-            flash(msg, 'success')
+            component = Component.get(component_id, g.db)
+            if not component:
+                flash(f"Component '{component_id}' not found.", 'danger')
+                return redirect(url_for('upload.iv_test'))
 
-            return redirect(url_for('tests.test_detail', test_id=test_id))
-
-        finally:
-            # Clean up temp files
-            for temp_path in temp_files:
-                try:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                except Exception:
-                    pass
+            return _handle_single_iv_upload(
+                component_id, raw_data_files, analyzable_extensions,
+                analyze_data, iv_analysis_available, tested_by, test_setup,
+                test_conditions, notes, pass_fail
+            )
 
     # GET request - show the upload form
     components = Component.list_all(db=g.db)
@@ -311,6 +263,210 @@ def iv_test():
                          prefill_component_id=prefill_component_id,
                          allowed_data_extensions=ALLOWED_DATA_EXTENSIONS,
                          iv_analysis_available=iv_analysis_available)
+
+
+def _handle_single_iv_upload(component_id, raw_data_files, analyzable_extensions,
+                              analyze_data, iv_analysis_available, tested_by,
+                              test_setup, test_conditions, notes, pass_fail):
+    """Handle single IV test upload for one component."""
+    from hps_svt_tracker.plotting import analyze_iv_file
+
+    measurements = {}
+    files = {}
+    temp_files = []
+
+    try:
+        analyzed_file = None
+
+        if raw_data_files:
+            raw_data_paths = []
+            for f in raw_data_files:
+                if f.filename != '':
+                    if not allowed_data(f.filename):
+                        flash(f"Invalid data file type: {f.filename}", 'warning')
+                        continue
+                    temp_path = save_temp_file(f)
+                    if temp_path:
+                        raw_data_paths.append(temp_path)
+                        temp_files.append(temp_path)
+
+                        ext = Path(f.filename).suffix.lower()
+                        if analyze_data and iv_analysis_available and ext in analyzable_extensions and not analyzed_file:
+                            analyzed_file = temp_path
+
+            if raw_data_paths:
+                files['raw_data'] = raw_data_paths
+
+        # Perform IV analysis
+        if analyzed_file:
+            analysis_result = analyze_iv_file(analyzed_file, component_id)
+
+            if analysis_result['success']:
+                analyzed_measurements = analysis_result['measurements']
+                measurements.update(analyzed_measurements)
+
+                if analysis_result['plot_bytes']:
+                    fd, plot_temp_path = tempfile.mkstemp(suffix='.png')
+                    os.close(fd)
+                    with open(plot_temp_path, 'wb') as f:
+                        f.write(analysis_result['plot_bytes'])
+                    temp_files.append(plot_temp_path)
+
+                    if 'plot' not in files:
+                        files['plot'] = []
+                    files['plot'].append(plot_temp_path)
+
+                msg_parts = [f"Analyzed IV data: {analyzed_measurements.get('num_points', 0)} data points"]
+                msg_parts.append(f"Voltage range: {analyzed_measurements.get('voltage_min', 0):.0f} - {analyzed_measurements.get('voltage_max', 0):.0f} V")
+                msg_parts.append(f"Current @ max V: {analyzed_measurements.get('current_at_max_voltage', 0):.2e} A")
+                flash(". ".join(msg_parts), 'info')
+            else:
+                flash(f"Could not analyze data file: {analysis_result['error']}", 'warning')
+
+        # Create test result
+        test_result = TestResult(
+            component_id=component_id,
+            test_type='iv_curve',
+            pass_fail=pass_fail,
+            measurements=measurements if measurements else None,
+            files=files if files else None,
+            tested_by=tested_by,
+            test_setup=test_setup or None,
+            test_conditions=test_conditions or None,
+            notes=notes or None
+        )
+
+        test_id = test_result.save(g.db)
+
+        file_count = len(test_result.stored_files) if test_result.stored_files else 0
+        msg = f'IV test recorded successfully (Test ID: {test_id})'
+        if file_count > 0:
+            msg += f' with {file_count} file(s)'
+        flash(msg, 'success')
+
+        return redirect(url_for('tests.test_detail', test_id=test_id))
+
+    finally:
+        for temp_path in temp_files:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception:
+                pass
+
+
+def _handle_bulk_iv_upload(raw_data_files, analyzable_extensions, analyze_data,
+                           iv_analysis_available, tested_by, test_setup,
+                           test_conditions, notes, pass_fail):
+    """Handle bulk IV test upload - one test per file, component ID from filename."""
+    from hps_svt_tracker.plotting import analyze_iv_file
+
+    if not raw_data_files or all(f.filename == '' for f in raw_data_files):
+        flash('No files selected for bulk upload.', 'danger')
+        return redirect(url_for('upload.iv_test'))
+
+    success_count = 0
+    error_count = 0
+    skipped_files = []
+    created_tests = []
+
+    for f in raw_data_files:
+        if f.filename == '':
+            continue
+
+        # Parse component ID from filename
+        component_id, parsed = parse_sensor_id_from_filename(f.filename)
+        if not parsed:
+            skipped_files.append(f.filename)
+            error_count += 1
+            continue
+
+        # Check if component exists
+        component = Component.get(component_id, g.db)
+        if not component:
+            skipped_files.append(f"{f.filename} (component {component_id} not found)")
+            error_count += 1
+            continue
+
+        # Validate file type
+        if not allowed_data(f.filename):
+            skipped_files.append(f"{f.filename} (invalid file type)")
+            error_count += 1
+            continue
+
+        temp_files = []
+        try:
+            # Save file temporarily
+            temp_path = save_temp_file(f)
+            if not temp_path:
+                skipped_files.append(f"{f.filename} (could not save)")
+                error_count += 1
+                continue
+            temp_files.append(temp_path)
+
+            measurements = {}
+            files = {'raw_data': [temp_path]}
+
+            # Analyze if enabled
+            ext = Path(f.filename).suffix.lower()
+            if analyze_data and iv_analysis_available and ext in analyzable_extensions:
+                analysis_result = analyze_iv_file(temp_path, component_id)
+
+                if analysis_result['success']:
+                    measurements.update(analysis_result['measurements'])
+
+                    if analysis_result['plot_bytes']:
+                        fd, plot_temp_path = tempfile.mkstemp(suffix='.png')
+                        os.close(fd)
+                        with open(plot_temp_path, 'wb') as plot_f:
+                            plot_f.write(analysis_result['plot_bytes'])
+                        temp_files.append(plot_temp_path)
+
+                        if 'plot' not in files:
+                            files['plot'] = []
+                        files['plot'].append(plot_temp_path)
+
+            # Create test result
+            test_result = TestResult(
+                component_id=component_id,
+                test_type='iv_curve',
+                pass_fail=pass_fail,
+                measurements=measurements if measurements else None,
+                files=files,
+                tested_by=tested_by,
+                test_setup=test_setup or None,
+                test_conditions=test_conditions or None,
+                notes=notes or None
+            )
+
+            test_id = test_result.save(g.db)
+            created_tests.append((component_id, test_id))
+            success_count += 1
+
+        except Exception as e:
+            skipped_files.append(f"{f.filename} (error: {str(e)})")
+            error_count += 1
+
+        finally:
+            for temp_path in temp_files:
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except Exception:
+                    pass
+
+    # Build summary messages
+    if success_count > 0:
+        flash(f'Successfully created {success_count} IV test(s).', 'success')
+
+    if error_count > 0:
+        flash(f'Skipped {error_count} file(s): {", ".join(skipped_files[:5])}{"..." if len(skipped_files) > 5 else ""}', 'warning')
+
+    # Redirect to component list or first test
+    if len(created_tests) == 1:
+        return redirect(url_for('tests.test_detail', test_id=created_tests[0][1]))
+    else:
+        return redirect(url_for('components.list_components'))
 
 
 @upload_bp.route('/edge-imaging', methods=['GET', 'POST'])
@@ -701,6 +857,180 @@ def flange_qc():
     return render_template('upload/flange_qc.html',
                          component_ids=component_ids,
                          prefill_component_id=prefill_component_id)
+
+
+@upload_bp.route('/noise-test', methods=['GET', 'POST'])
+def noise_test():
+    """Upload a noise test result with plots from a tar file"""
+    if request.method == 'POST':
+        # Get form data
+        component_id = request.form.get('component_id', '').strip()
+        tested_by = request.form.get('tested_by', '').strip() or get_current_user()
+        test_setup = request.form.get('test_setup', '').strip()
+        test_conditions = request.form.get('test_conditions', '').strip()
+        notes = request.form.get('notes', '').strip()
+        file_filter = request.form.get('file_filter', '').strip()
+
+        # Pass/fail
+        pass_fail_value = request.form.get('pass_fail', '')
+        pass_fail = None
+        if pass_fail_value == 'pass':
+            pass_fail = True
+        elif pass_fail_value == 'fail':
+            pass_fail = False
+
+        # Validate component exists and is a hybrid
+        if not component_id:
+            flash('Component ID is required.', 'danger')
+            return redirect(url_for('upload.noise_test'))
+
+        component = Component.get(component_id, g.db)
+        if not component:
+            flash(f"Component '{component_id}' not found.", 'danger')
+            return redirect(url_for('upload.noise_test'))
+
+        if component.type != 'hybrid':
+            flash(f"Component '{component_id}' is not a hybrid (type: {component.type}).", 'danger')
+            return redirect(url_for('upload.noise_test'))
+
+        # Get tar file
+        tar_file = request.files.get('plots_tar')
+        if not tar_file or tar_file.filename == '':
+            flash('Please upload a tar file containing plots.', 'danger')
+            return redirect(url_for('upload.noise_test'))
+
+        # Create temp directory for extraction
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            # Extract images from tar with optional filtering
+            extracted_files = extract_filtered_images_from_tar(tar_file, temp_dir, file_filter)
+
+            if not extracted_files:
+                if file_filter:
+                    flash(f'No image files matching filter "{file_filter}" found in tar file.', 'danger')
+                else:
+                    flash('No valid image files found in tar file.', 'danger')
+                return redirect(url_for('upload.noise_test'))
+
+            # Build measurements dict
+            measurements = {
+                'file_count': len(extracted_files),
+                'file_filter': file_filter if file_filter else None,
+            }
+
+            # Prepare files dict for TestResult
+            plot_paths = [f[0] for f in extracted_files]
+
+            # Create test result
+            test_result = TestResult(
+                component_id=component_id,
+                test_type='noise_test',
+                pass_fail=pass_fail,
+                measurements=measurements,
+                files={'plot': plot_paths} if plot_paths else None,
+                tested_by=tested_by,
+                test_setup=test_setup or None,
+                test_conditions=test_conditions or None,
+                notes=notes or None
+            )
+
+            test_id = test_result.save(g.db)
+
+            # Build success message
+            msg = f'Noise test recorded (Test ID: {test_id}) with {len(extracted_files)} plot(s)'
+            if file_filter:
+                msg += f' (filtered by "{file_filter}")'
+            flash(msg, 'success')
+
+            return redirect(url_for('tests.test_detail', test_id=test_id))
+
+        finally:
+            # Clean up temp directory
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+
+    # GET request - show the upload form
+    # Filter to only show hybrid components
+    components = Component.list_all(db=g.db)
+    hybrid_components = [c for c in components if c.type == 'hybrid']
+    component_ids = [c.id for c in hybrid_components]
+    prefill_component_id = request.args.get('component_id', '')
+
+    return render_template('upload/noise_test.html',
+                         component_ids=component_ids,
+                         prefill_component_id=prefill_component_id)
+
+
+def extract_filtered_images_from_tar(tar_file, temp_dir, file_filter=None):
+    """
+    Extract image files from a tar archive with optional filename filtering.
+
+    Args:
+        tar_file: Werkzeug FileStorage object
+        temp_dir: Directory to extract files to
+        file_filter: Optional string to filter filenames (case-insensitive)
+
+    Returns:
+        List of tuples: (temp_path, original_filename) for each extracted image
+    """
+    images = []
+
+    if not tar_file or tar_file.filename == '':
+        return images
+
+    # Save tar to temp first
+    tar_temp_path = os.path.join(temp_dir, secure_filename(tar_file.filename))
+    tar_file.save(tar_temp_path)
+
+    try:
+        with tarfile.open(tar_temp_path, mode='r:*') as tf:
+            for member in tf.getmembers():
+                if not member.isfile():
+                    continue
+
+                # Get basename
+                basename = os.path.basename(member.name)
+
+                # Apply filter if specified
+                if file_filter and file_filter.lower() not in basename.lower():
+                    continue
+
+                # Check if it's an image file
+                ext = Path(member.name).suffix.lower().lstrip('.')
+                if ext not in ALLOWED_IMAGE_EXTENSIONS:
+                    continue
+
+                # Extract to temp directory
+                safe_name = secure_filename(basename)
+                if not safe_name:
+                    continue
+
+                extract_path = os.path.join(temp_dir, safe_name)
+
+                # Handle duplicate filenames
+                counter = 1
+                base, extension = os.path.splitext(safe_name)
+                while os.path.exists(extract_path):
+                    extract_path = os.path.join(temp_dir, f"{base}_{counter}{extension}")
+                    counter += 1
+
+                # Extract the file
+                with tf.extractfile(member) as src:
+                    if src:
+                        with open(extract_path, 'wb') as dst:
+                            dst.write(src.read())
+
+                images.append((extract_path, basename))
+
+    except tarfile.TarError as e:
+        raise ValueError(f"Error reading tar file: {e}")
+    finally:
+        # Remove the temp tar file
+        if os.path.exists(tar_temp_path):
+            os.remove(tar_temp_path)
+
+    return images
 
 
 @upload_bp.route('/maintenance', methods=['GET', 'POST'])
