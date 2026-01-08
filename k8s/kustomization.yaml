@@ -22,8 +22,8 @@ commonLabels:
 # Image customization (update tag as needed)
 images:
   - name: hps-svt-tracker
-    newName: hps-svt-tracker  # Update with your registry path
-    newTag: latest            # Update with your image tag
+    newName: ghcr.io/mgignac/hps-svt-tracker
+    newTag: main
 
 # Secret generator (alternative to manual secret creation)
 # Uncomment and update the literal value, or use a file
