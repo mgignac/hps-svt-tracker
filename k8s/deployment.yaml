@@ -82,7 +82,7 @@ spec:
 
       containers:
         - name: svt-tracker
-          image: hps-svt-tracker:latest  # Update with your registry/image:tag
+          image: hps-svt-tracker:latest
           imagePullPolicy: IfNotPresent
 
           ports:
